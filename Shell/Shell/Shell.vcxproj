@@ -150,10 +150,12 @@
     <ClCompile Include="20070929.c" />
     <ClCompile Include="hash.c" />
     <ClCompile Include="list.c" />
+    <ClCompile Include="shell.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="hash.h" />
     <ClInclude Include="list.h" />
+    <ClInclude Include="shell.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="opcode.txt" />
