@@ -24,12 +24,18 @@
     <ClCompile Include="hash.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="shell.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="list.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
     <ClInclude Include="hash.h">
+      <Filter>소스 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="shell.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
   </ItemGroup>

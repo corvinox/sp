@@ -1,4 +1,4 @@
-#ifndef SHELL_H_
+ï»¿#ifndef SHELL_H_
 #define SHELL_H_
 
 #include "list.h"
@@ -22,45 +22,55 @@
 #define ARG_LEN_MAX 80
 #define ARG_CNT_MAX 3
 
-#define ERR_NONE        0
-#define ERR_INIT        1
-#define ERR_NO_CMD      2
-#define ERR_INVALID_USE 3
-#define ERR_RUN_FAIL    4
-#define ERR_EMPTY       5
+typedef enum Error
+{ 
+	ERR_NONE, 
+	ERR_INIT, 
+	ERR_NO_CMD, 
+	ERR_INVALID_USE, 
+	ERR_RUN_FAIL, 
+	ERR_EMPTY 
+} Error;
 
-#define CMD_CNT 10
-#define CMD_INVALID -1
-#define CMD_HELP    0
-#define CMD_DIR     1
-#define CMD_QUIT    2
-#define CMD_HISTORY 3
-#define CMD_DUMP    4
-#define CMD_EDIT    5
-#define CMD_FILL    6
-#define CMD_RESET   7
-#define CMD_OPCODE  8
-#define CMD_OPLIST  9
+#define CMD_CNT 13
+typedef enum Command
+{ 
+	CMD_INVALID = -1, 
+	CMD_HELP, 
+	CMD_DIR, 
+	CMD_QUIT, 
+	CMD_HISTORY, 
+	CMD_DUMP, 
+	CMD_EDIT, 
+	CMD_FILL, 
+	CMD_RESET, 
+	CMD_OPCODE, 
+	CMD_OPLIST,
+	CMD_ASSEMBLE,
+	CMD_TYPE,
+	CMD_SYMBOL
+} Command;
+
 
 /*************************************************************************************
-* ¼³¸í: Shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã´Â ±¸Á¶Ã¼
-* cmd_code: »ç¿ëÀÚ°¡ ÀÔ·ÂÇÑ ¸í·É¿¡ ¸ÅÇÎµÇ´Â Á¤¼ö°ª
-* argc: ¸í·É¿¡ ´ëÇÑ ÀÎÀÚÀÇ °¹¼ö
-* error: error¸¦ ³ªÅ¸³»´Â Á¤¼ö°ª
-* quit: shell Á¾·á ¿©ºÎ¸¦ ³ªÅ¸³»´Â ÇÃ·¡±×
-* init: shellÀÌ Á¤»óÀûÀ¸·Î ÃÊ±âÈ­ µÇ¾ú´ÂÁö ¿©ºÎ¸¦ ³ªÅ¸³»´Â ÇÃ·¡±×
-* mem_addr: dump¸¦ À§ÇØ ³»ºÎÀûÀ¸·Î ÀúÀåÇÏ´Â memoryÀÇ ÁÖ¼Ò°ª
+* ì„¤ëª…: Shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ëŠ” êµ¬ì¡°ì²´
+* cmd_code: ì‚¬ìš©ìê°€ ì…ë ¥í•œ ëª…ë ¹ì— ë§¤í•‘ë˜ëŠ” ì •ìˆ˜ê°’
+* argc: ëª…ë ¹ì— ëŒ€í•œ ì¸ìì˜ ê°¯ìˆ˜
+* error: errorë¥¼ ë‚˜íƒ€ë‚´ëŠ” ì •ìˆ˜ê°’
+* quit: shell ì¢…ë£Œ ì—¬ë¶€ë¥¼ ë‚˜íƒ€ë‚´ëŠ” í”Œë˜ê·¸
+* init: shellì´ ì •ìƒì ìœ¼ë¡œ ì´ˆê¸°í™” ë˜ì—ˆëŠ”ì§€ ì—¬ë¶€ë¥¼ ë‚˜íƒ€ë‚´ëŠ” í”Œë˜ê·¸
+* mem_addr: dumpë¥¼ ìœ„í•´ ë‚´ë¶€ì ìœ¼ë¡œ ì €ì¥í•˜ëŠ” memoryì˜ ì£¼ì†Œê°’
 * vm: virtual memory
-* cmd_line: »ç¿ëÀÚÀÇ ÀÔ·Â
-* args: ¸í·É¿¡ ´ëÇÑ ÀÎÀÚµé
-* cmds: ¸í·ÉÀ» ½ÇÇàÇÏ´Â ÇÔ¼ö¿¡ ´ëÇÑ Æ÷ÀÎÅÍ ¹è¿­
-* history: Á¤»óÀûÀ¸·Î ½ÇÇàµÈ ¸í·É¿¡ ´ëÇÑ command-lineÀ» ÀúÀåÇÏ±â À§ÇÑ list
-* op_table: opcodeÀÇ code, mnemonic, type¿¡ ´ëÇÑ Á¤º¸¸¦ ÀúÀåÇÒ hash table
+* cmd_line: ì‚¬ìš©ìì˜ ì…ë ¥
+* args: ëª…ë ¹ì— ëŒ€í•œ ì¸ìë“¤
+* cmds: ëª…ë ¹ì„ ì‹¤í–‰í•˜ëŠ” í•¨ìˆ˜ì— ëŒ€í•œ í¬ì¸í„° ë°°ì—´
+* history: ì •ìƒì ìœ¼ë¡œ ì‹¤í–‰ëœ ëª…ë ¹ì— ëŒ€í•œ command-lineì„ ì €ì¥í•˜ê¸° ìœ„í•œ list
+* op_table: opcodeì˜ code, mnemonic, typeì— ëŒ€í•œ ì •ë³´ë¥¼ ì €ì¥í•  hash table
 *************************************************************************************/
 typedef struct Shell_ {
-	int cmd_code;
+	Error error;
+	Command cmd_code;
 	int argc;
-	int error;
 	int quit;
 	int init;
 	unsigned int mem_addr;
@@ -73,7 +83,7 @@ typedef struct Shell_ {
 	HashTable op_table;
 } Shell;
 
-/* Shell °ü·Ã ÇÔ¼ö */
+/* Shell ê´€ë ¨ í•¨ìˆ˜ */
 extern void initializeShell(Shell* shell);
 extern void startShell(Shell* shell);
 extern void releaseShell(Shell* shell);

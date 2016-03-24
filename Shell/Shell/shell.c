@@ -1,4 +1,4 @@
-#include "shell.h"
+ï»¿#include "shell.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -8,18 +8,25 @@
 
 #define strdup _strdup
 
-/* Command °ü·Ã ÇÔ¼ö */
-void runCmdHelp(Shell* shell);
-void runCmdDir(Shell* shell);
-void runCmdQuit(Shell* shell);
-void runCmdHistory(Shell* shell);
-void runCmdDump(Shell* shell);
-void runCmdEdit(Shell* shell);
-void runCmdFill(Shell* shell);
-void runCmdReset(Shell* shell);
-void runCmdOpcode(Shell* shell);
-void runCmdOplist(Shell* shell);
-void runCommand(Shell* shell);
+#define BUFFER_SIZE 12
+
+/* Command ê´€ë ¨ í•¨ìˆ˜ */
+static void runCmdHelp(Shell* shell);
+static void runCmdDir(Shell* shell);
+static void runCmdQuit(Shell* shell);
+static void runCmdHistory(Shell* shell);
+static void runCmdDump(Shell* shell);
+static void runCmdEdit(Shell* shell);
+static void runCmdFill(Shell* shell);
+static void runCmdReset(Shell* shell);
+static void runCmdOpcode(Shell* shell);
+static void runCmdOplist(Shell* shell);
+static void runCmdAssemble(Shell* shell);
+static void runCmdType(Shell* shell);
+static void runCmdSymbol(Shell* shell);
+static void initializeCommand(Shell* shell);
+static void runCommand(Shell* shell);
+
 
 static void printError(int err_code);
 static void parseOpcode(Shell* shell);
@@ -32,19 +39,18 @@ static void releaseHistory(void* data, void* aux);
 static void releaseOplist(void* data, void* aux);
 
 /*************************************************************************************
-* ¼³¸í: Shell ±¸Á¶Ã¼¿¡ ´ëÇÑ ÃÊ±âÈ­¸¦ ¼öÇàÇÑ´Ù. ¿¹¸¦ µé¸é, °¢Á¾ º¯¼öµéÀÇ °ªÀ»
-*       ÃÊ±âÈ­ÇÏ°í, °¡»ó ¸Ş¸ğ¸®¿¡ ´ëÇÑ ¸Ş¸ğ¸® ÇÒ´çÀ» ÇÏ°í, ÆÄÀÏÀ» ÀĞ¾î opcode tableÀ»
-*       ±¸¼ºÇÏ´Â µîÀÇ ÀÛ¾÷À» ¼öÇàÇÑ´Ù. startÇÏ±â Àü¿¡´Â ¹«Á¶°Ç ½ÇÇàÇØ¾ß ÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: Shell êµ¬ì¡°ì²´ì— ëŒ€í•œ ì´ˆê¸°í™”ë¥¼ ìˆ˜í–‰í•œë‹¤. ì˜ˆë¥¼ ë“¤ë©´, ê°ì¢… ë³€ìˆ˜ë“¤ì˜ ê°’ì„
+*       ì´ˆê¸°í™”í•˜ê³ , ê°€ìƒ ë©”ëª¨ë¦¬ì— ëŒ€í•œ ë©”ëª¨ë¦¬ í• ë‹¹ì„ í•˜ê³ , íŒŒì¼ì„ ì½ì–´ opcode tableì„
+*       êµ¬ì„±í•˜ëŠ” ë“±ì˜ ì‘ì—…ì„ ìˆ˜í–‰í•œë‹¤. startí•˜ê¸° ì „ì—ëŠ” ë¬´ì¡°ê±´ ì‹¤í–‰í•´ì•¼ í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 void initializeShell(Shell* shell)
 {
 	int i;
 
 	/* init variables */
-	shell->cmd_code = CMD_INVALID;
 	shell->argc = 0;
 	shell->quit = false;
 	shell->mem_addr = 0;
@@ -66,6 +72,8 @@ void initializeShell(Shell* shell)
 	initializeList(&shell->history);
 	initializeHash(&shell->op_table, hashFunc, hashCmp);
 
+	/* init command */
+	initializeCommand(shell);
 
 	/* command function mapping */
 	shell->cmds[CMD_HELP] = runCmdHelp;
@@ -79,10 +87,10 @@ void initializeShell(Shell* shell)
 	shell->cmds[CMD_OPCODE] = runCmdOpcode;
 	shell->cmds[CMD_OPLIST] = runCmdOplist;
 
-	/* opcode¿¡ ´ëÇÑ Á¤º¸¸¦ ÀúÀå */
+	/* opcodeì— ëŒ€í•œ ì •ë³´ë¥¼ ì €ì¥ */
 	parseOpcode(shell);
 
-	/* ÃÊ±âÈ­ °úÁ¤À» ¸ğµÎ ³¡³»°í ¿¡·¯°¡ ÀÖÀ¸¸é ÃÊ±âÈ­ ½ÇÆĞ */
+	/* ì´ˆê¸°í™” ê³¼ì •ì„ ëª¨ë‘ ëë‚´ê³  ì—ëŸ¬ê°€ ìˆìœ¼ë©´ ì´ˆê¸°í™” ì‹¤íŒ¨ */
 	if (shell->error != ERR_NONE) {
 		shell->init = false;
 		printError(shell->error);
@@ -93,25 +101,25 @@ void initializeShell(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ·çÇÁ¸¦ µ¹¸é¼­ »ç¿ëÀÚ·ÎºÎÅÍ ¸í·ÉÀ» ÀÔ·Â¹Ş°í ÆÄ½ÌÇÏ°í ½ÇÇàÇÏ´Â °ÍÀ» ¹İº¹ÇÑ´Ù.
-»ç¿ëÀÚ°¡ quit ¸í·ÉÀ» ³»¸± ¶§ ±îÁö ¹İº¹ÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ë£¨í”„ë¥¼ ëŒë©´ì„œ ì‚¬ìš©ìë¡œë¶€í„° ëª…ë ¹ì„ ì…ë ¥ë°›ê³  íŒŒì‹±í•˜ê³  ì‹¤í–‰í•˜ëŠ” ê²ƒì„ ë°˜ë³µí•œë‹¤.
+ì‚¬ìš©ìê°€ quit ëª…ë ¹ì„ ë‚´ë¦´ ë•Œ ê¹Œì§€ ë°˜ë³µí•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 void startShell(Shell* shell)
 {
 	while (!shell->quit) {
 		printf("sicsim>");
 
-		/* »ç¿ëÀÚ·ÎºÎÅÍ ÀÔ·ÂÀ» ¹Ş¾Æ¼­ ¸í·É°ú ¸í·É ÀÎÀÚµéÀ» ÆÄ½Ì */
+		/* ì‚¬ìš©ìë¡œë¶€í„° ì…ë ¥ì„ ë°›ì•„ì„œ ëª…ë ¹ê³¼ ëª…ë ¹ ì¸ìë“¤ì„ íŒŒì‹± */
 		parseCommandLine(shell);
 
-		/* error°¡ ¾øÀ¸¸é command ½ÇÇà */
+		/* errorê°€ ì—†ìœ¼ë©´ command ì‹¤í–‰ */
 		if (shell->error == ERR_NONE)
 			runCommand(shell);
 
-		/* À§ÀÇ °úÁ¤¿¡¼­ error°¡ ÀÖÀ¸¸é Ãâ·Â */
+		/* ìœ„ì˜ ê³¼ì •ì—ì„œ errorê°€ ìˆìœ¼ë©´ ì¶œë ¥ */
 		if (shell->error != ERR_NONE)
 			printError(shell->error);
 
@@ -120,11 +128,11 @@ void startShell(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: shell¿¡ ÇÒ´çµÈ ¸Ş¸ğ¸®¸¦ ¸ğµÎ ÇØÁ¦ÇÑ´Ù. ÇÁ·Î±×·¥ Á¾·á Àü¿¡ ¹İµå½Ã ½ÇÇàÇÑ´Ù.
-°¡»ó ¸Ş¸ğ¸®, ¸®½ºÆ®, ÇØ½¬Å×ÀÌºí µîÀÇ ¸Ş¸ğ¸®¸¦ ÇØÁ¦ÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: shellì— í• ë‹¹ëœ ë©”ëª¨ë¦¬ë¥¼ ëª¨ë‘ í•´ì œí•œë‹¤. í”„ë¡œê·¸ë¨ ì¢…ë£Œ ì „ì— ë°˜ë“œì‹œ ì‹¤í–‰í•œë‹¤.
+ê°€ìƒ ë©”ëª¨ë¦¬, ë¦¬ìŠ¤íŠ¸, í•´ì‰¬í…Œì´ë¸” ë“±ì˜ ë©”ëª¨ë¦¬ë¥¼ í•´ì œí•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 void releaseShell(Shell* shell)
 {
@@ -139,12 +147,12 @@ void releaseShell(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: »ç¿ë°¡´ÉÇÑ ¸í·É¾î ¸ñ·ÏÀ» Ãâ·Â
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ì‚¬ìš©ê°€ëŠ¥í•œ ëª…ë ¹ì–´ ëª©ë¡ì„ ì¶œë ¥
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdHelp(Shell* shell)
+static void runCmdHelp(Shell* shell)
 {
 	if (shell->argc != 0) {
 		shell->error = ERR_INVALID_USE;
@@ -164,13 +172,13 @@ void runCmdHelp(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ÇöÀç µğ·ºÅä¸®¿¡ ÀÖ´Â µğ·ºÅä¸®¿Í ÆÄÀÏµéÀÇ ¸ñ·ÏÀ» Ãâ·Â
-*       ½ÇÇà ÆÄÀÏÀº ÆÄÀÏ ÀÌ¸§ ¿·¿¡´Â '*'Ç¥½Ã¸¦, µğ·ºÅä¸®´Â '/'Ç¥½ÃÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: í˜„ì¬ ë””ë ‰í† ë¦¬ì— ìˆëŠ” ë””ë ‰í† ë¦¬ì™€ íŒŒì¼ë“¤ì˜ ëª©ë¡ì„ ì¶œë ¥
+*       ì‹¤í–‰ íŒŒì¼ì€ íŒŒì¼ ì´ë¦„ ì˜†ì—ëŠ” '*'í‘œì‹œë¥¼, ë””ë ‰í† ë¦¬ëŠ” '/'í‘œì‹œí•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdDir(Shell* shell)
+static void runCmdDir(Shell* shell)
 {
 	//struct dirent *entry;
 	//struct stat fs;
@@ -183,7 +191,7 @@ void runCmdDir(Shell* shell)
 	//}
 
 	//if ((dp = opendir(".")) == NULL) {
-	//	printf("µğ·ºÅä¸® °æ·Î¸¦ ¿­Áö ¸øÇß½À´Ï´Ù.\n");
+	//	printf("ë””ë ‰í† ë¦¬ ê²½ë¡œë¥¼ ì—´ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.\n");
 	//	shell->error = ERR_RUN_FAIL;
 	//	return;
 	//}
@@ -191,13 +199,13 @@ void runCmdDir(Shell* shell)
 	//while ((entry = readdir(dp)) != NULL) {
 	//	lstat(entry->d_name, &fs);
 
-	//	/* . ¿Í ..´Â Á¦¿Ü */
+	//	/* . ì™€ ..ëŠ” ì œì™¸ */
 	//	if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 	//		continue;
 
 	//	printf("      %s", entry->d_name);
 
-	//	/* µğ·ºÅä¸®¸é ³¡¿¡ '/', ½ÇÇà¼Ó¼ºÀ» °¡Áö¸é '*'¸¦ Ç¥½Ã */
+	//	/* ë””ë ‰í† ë¦¬ë©´ ëì— '/', ì‹¤í–‰ì†ì„±ì„ ê°€ì§€ë©´ '*'ë¥¼ í‘œì‹œ */
 	//	if (S_ISDIR(fs.st_mode))
 	//		printf("/");
 	//	else if (fs.st_mode&S_IEXEC)
@@ -210,13 +218,13 @@ void runCmdDir(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: shellÀ» Á¾·áÇÏ±â À§ÇÑ ¸í·É shell ±¸Á¶Ã¼ÀÇ quit°ªÀ» true·Î ÇÏ¿© shellÀÌ
-*       Á¾·áµÇµµ·Ï ÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: shellì„ ì¢…ë£Œí•˜ê¸° ìœ„í•œ ëª…ë ¹ shell êµ¬ì¡°ì²´ì˜ quitê°’ì„ trueë¡œ í•˜ì—¬ shellì´
+*       ì¢…ë£Œë˜ë„ë¡ í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdQuit(Shell* shell)
+static void runCmdQuit(Shell* shell)
 {
 	if (shell->argc != 0) {
 		shell->error = ERR_INVALID_USE;
@@ -227,13 +235,13 @@ void runCmdQuit(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ÇöÀç±îÁö »ç¿ëÇÑ ¸í·É¾îµéÀ» ¼ø¼­´ë·Î ¹øÈ£¿Í ÇÔ²² º¸¿©ÁØ´Ù.
-*       °¡Àå ÃÖ±Ù »ç¿ëÇÑ ¸í·É¾î°¡ ¸®½ºÆ®ÀÇ ÇÏ´Ü¿¡ ¿À°Ô µÈ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: í˜„ì¬ê¹Œì§€ ì‚¬ìš©í•œ ëª…ë ¹ì–´ë“¤ì„ ìˆœì„œëŒ€ë¡œ ë²ˆí˜¸ì™€ í•¨ê»˜ ë³´ì—¬ì¤€ë‹¤.
+*       ê°€ì¥ ìµœê·¼ ì‚¬ìš©í•œ ëª…ë ¹ì–´ê°€ ë¦¬ìŠ¤íŠ¸ì˜ í•˜ë‹¨ì— ì˜¤ê²Œ ëœë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdHistory(Shell* shell)
+static void runCmdHistory(Shell* shell)
 {
 	int num = 0;
 	Node* ptr;
@@ -249,20 +257,20 @@ void runCmdHistory(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: shell¿¡ ÇÒ´çµÇ¾î ÀÖ´Â ¸Ş¸ğ¸®ÀÇ ³»¿ëÀ» Æ¯Á¤ Çü½ÄÀ¸·Î Ãâ·ÂÇÑ´Ù.
-* »ç¿ë¹ı:
-* - dump: ±âº»ÀûÀ¸·Î 160 ¹ÙÀÌÆ®¸¦ Ãâ·ÂÇÑ´Ù.
-*          dumpÀÇ ½ÇÇàÀ¸·Î Ãâ·ÂµÈ ¸¶Áö¸· address´Â shell->mem_addr ¿¡ ÀúÀåÇÏ°í ÀÖ´Ù.
-*          ´Ù½Ã dump¸¦ ½ÇÇà½ÃÅ°¸é ¸¶Áö¸· ( address + 1 ) ¹øÁöºÎÅÍ Ãâ·ÂÇÑ´Ù.
-*          dump ¸í·É¾î°¡ Ã³À½ ½ÃÀÛµÉ ¶§´Â 0 ¹øÁöºÎÅÍ Ãâ·ÂÇÑ´Ù.
-*          dump°¡ Ãâ·ÂÇÒ ½Ã boundary check¸¦ ÇÏ¿© exception error Ã³¸®ÇÑ´Ù.
-* - dump start: start ¹øÁöºÎÅÍ 10¶óÀÎÀ» Ãâ·Â.
-* - dump start, end: startºÎÅÍ end¹øÁö±îÁöÀÇ ³»¿ëÀ» Ãâ·Â.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: shellì— í• ë‹¹ë˜ì–´ ìˆëŠ” ë©”ëª¨ë¦¬ì˜ ë‚´ìš©ì„ íŠ¹ì • í˜•ì‹ìœ¼ë¡œ ì¶œë ¥í•œë‹¤.
+* ì‚¬ìš©ë²•:
+* - dump: ê¸°ë³¸ì ìœ¼ë¡œ 160 ë°”ì´íŠ¸ë¥¼ ì¶œë ¥í•œë‹¤.
+*          dumpì˜ ì‹¤í–‰ìœ¼ë¡œ ì¶œë ¥ëœ ë§ˆì§€ë§‰ addressëŠ” shell->mem_addr ì— ì €ì¥í•˜ê³  ìˆë‹¤.
+*          ë‹¤ì‹œ dumpë¥¼ ì‹¤í–‰ì‹œí‚¤ë©´ ë§ˆì§€ë§‰ ( address + 1 ) ë²ˆì§€ë¶€í„° ì¶œë ¥í•œë‹¤.
+*          dump ëª…ë ¹ì–´ê°€ ì²˜ìŒ ì‹œì‘ë  ë•ŒëŠ” 0 ë²ˆì§€ë¶€í„° ì¶œë ¥í•œë‹¤.
+*          dumpê°€ ì¶œë ¥í•  ì‹œ boundary checkë¥¼ í•˜ì—¬ exception error ì²˜ë¦¬í•œë‹¤.
+* - dump start: start ë²ˆì§€ë¶€í„° 10ë¼ì¸ì„ ì¶œë ¥.
+* - dump start, end: startë¶€í„° endë²ˆì§€ê¹Œì§€ì˜ ë‚´ìš©ì„ ì¶œë ¥.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdDump(Shell* shell)
+static void runCmdDump(Shell* shell)
 {
 	int start_addr;
 	int end_addr;
@@ -271,31 +279,31 @@ void runCmdDump(Shell* shell)
 	int cur_addr;
 	int cur_base;
 
-	/* start¿Í end¸¦ ÁöÁ¤ÇÏÁö ¾Ê¾ÒÀ» ¶§*/
+	/* startì™€ endë¥¼ ì§€ì •í•˜ì§€ ì•Šì•˜ì„ ë•Œ*/
 	if (shell->argc == 0) {
 		start_addr = shell->mem_addr;
 		end_addr = start_addr + MEM_LINE * 10 - 1;
 		if (end_addr >= MEM_SIZE)
 			end_addr = MEM_SIZE - 1;
 	}
-	/* start¿Í end¸¦ ÁöÁ¤ÇßÀ» ¶§*/
+	/* startì™€ endë¥¼ ì§€ì •í–ˆì„ ë•Œ*/
 	else if (shell->argc == 2) {
 		char* ptr;
 		start_addr = (int)strtol(shell->args[0], &ptr, 16);
 		if (*ptr != 0) {
-			printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[0]);
+			printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[0]);
 			shell->error = ERR_RUN_FAIL;
 			return;
 		}
 
 		end_addr = (int)strtoul(shell->args[1], &ptr, 16);
 		if (*ptr != 0) {
-			printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[1]);
+			printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[1]);
 			shell->error = ERR_RUN_FAIL;
 			return;
 		}
 	}
-	/* ÀÌ¿Ü´Â ¿¡·¯ */
+	/* ì´ì™¸ëŠ” ì—ëŸ¬ */
 	else {
 		shell->error = ERR_INVALID_USE;
 		return;
@@ -303,17 +311,17 @@ void runCmdDump(Shell* shell)
 
 	/* check range */
 	if (start_addr < 0 || start_addr >= MEM_SIZE) {
-		printf("%X: ÁÖ¼Ò°ªÀÌ À¯È¿ ¹üÀ§: [0, FFFFF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", start_addr);
+		printf("%X: ì£¼ì†Œê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FFFFF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", start_addr);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	if (end_addr < 0 || end_addr >= MEM_SIZE) {
-		printf("%X: ÁÖ¼Ò°ªÀÌ À¯È¿ ¹üÀ§: [0, FFFFF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", end_addr);
+		printf("%X: ì£¼ì†Œê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FFFFF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", end_addr);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	if (start_addr > end_addr) {
-		printf("Àß¸øµÈ ¹üÀ§: ½ÃÀÛ ÁÖ¼Ò°ªÀÌ ³¡ ÁÖ¼Ò°ªÀ» ÃÊ°úÇÏ¿´½À´Ï´Ù.\n");
+		printf("ì˜ëª»ëœ ë²”ìœ„: ì‹œì‘ ì£¼ì†Œê°’ì´ ë ì£¼ì†Œê°’ì„ ì´ˆê³¼í•˜ì˜€ìŠµë‹ˆë‹¤.\n");
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
@@ -326,7 +334,7 @@ void runCmdDump(Shell* shell)
 		/* memory address */
 		printf("%05X ", cur_base);
 
-		/* 16Áø¼ö Ç¥±â */
+		/* 16ì§„ìˆ˜ í‘œê¸° */
 		for (cur_addr = cur_base; cur_addr < cur_base + MEM_LINE; cur_addr++) {
 			if (cur_addr >= start_addr && cur_addr <= end_addr)
 				printf("%02X ", (unsigned char)shell->vm[cur_addr]);
@@ -334,7 +342,7 @@ void runCmdDump(Shell* shell)
 				printf("   ");
 		}
 
-		/* ASCII Ç¥±â */
+		/* ASCII í‘œê¸° */
 		printf("; ");
 		for (cur_addr = cur_base; cur_addr < cur_base + MEM_LINE; cur_addr++) {
 			char value = shell->vm[cur_addr];
@@ -347,50 +355,50 @@ void runCmdDump(Shell* shell)
 		printf("\n");
 	}
 
-	/* ³»ºÎ ÀúÀå */
+	/* ë‚´ë¶€ ì €ì¥ */
 	shell->mem_addr = (end_addr + 1) % MEM_SIZE;
 }
 
 /*************************************************************************************
-* ¼³¸í: ¸Ş¸ğ¸®ÀÇ address¹øÁöÀÇ °ªÀ» value¿¡ ÁöÁ¤µÈ °ªÀ¸·Î º¯°æÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ë©”ëª¨ë¦¬ì˜ addressë²ˆì§€ì˜ ê°’ì„ valueì— ì§€ì •ëœ ê°’ìœ¼ë¡œ ë³€ê²½í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdEdit(Shell* shell)
+static void runCmdEdit(Shell* shell)
 {
 	char* ptr = NULL;
 	int addr = 0;
 	int value = 0;
 
-	/* ÀÎÀÚ°¡ 2°³°¡ ¾Æ´Ï¸é ¿¡·¯ */
+	/* ì¸ìê°€ 2ê°œê°€ ì•„ë‹ˆë©´ ì—ëŸ¬ */
 	if (shell->argc != 2) {
 		shell->error = ERR_INVALID_USE;
 		return;
 	}
 
-	/* arguments °Ë»ç ¹× 16Áø¼ö·Î º¯È¯ */
+	/* arguments ê²€ì‚¬ ë° 16ì§„ìˆ˜ë¡œ ë³€í™˜ */
 	addr = (int)strtoul(shell->args[0], &ptr, 16);
 	if (*ptr != 0) {
-		printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[0]);
+		printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[0]);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	value = (int)strtoul(shell->args[1], &ptr, 16);
 	if (*ptr != 0) {
-		printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[1]);
+		printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[1]);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 
 	/* check range */
 	if (addr < 0 || addr >= MEM_SIZE) {
-		printf("%X: ÁÖ¼Ò°ªÀÌ À¯È¿ ¹üÀ§: [0, FFFFF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", addr);
+		printf("%X: ì£¼ì†Œê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FFFFF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", addr);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	if (value < 0 || value > 255) {
-		printf("%X: °ªÀÌ À¯È¿ ¹üÀ§: [0, FF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", value);
+		printf("%X: ê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", value);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
@@ -400,62 +408,62 @@ void runCmdEdit(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ¸Ş¸ğ¸®ÀÇ start¹øÁöºÎÅÍ end¹øÁö±îÁöÀÇ °ªÀ» value¿¡ ÁöÁ¤µÈ °ªÀ¸·Î º¯°æÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ë©”ëª¨ë¦¬ì˜ startë²ˆì§€ë¶€í„° endë²ˆì§€ê¹Œì§€ì˜ ê°’ì„ valueì— ì§€ì •ëœ ê°’ìœ¼ë¡œ ë³€ê²½í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdFill(Shell* shell)
+static void runCmdFill(Shell* shell)
 {
 	char* ptr;
 	int start_addr = 0;
 	int end_addr = 0;
 	int value = 0;
 
-	/* argument°¡ 3°³°¡ ¾Æ´Ï¸é ¿¡·¯ */
+	/* argumentê°€ 3ê°œê°€ ì•„ë‹ˆë©´ ì—ëŸ¬ */
 	if (shell->argc != 3) {
 		shell->error = ERR_INVALID_USE;
 		return;
 	}
 
-	/* arguments °Ë»ç ¹× 16Áø¼ö·Î º¯È¯ */
+	/* arguments ê²€ì‚¬ ë° 16ì§„ìˆ˜ë¡œ ë³€í™˜ */
 	start_addr = (int)strtoul(shell->args[0], &ptr, 16);
 	if (*ptr != 0) {
-		printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[0]);
+		printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[0]);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	end_addr = (int)strtoul(shell->args[1], &ptr, 16);
 	if (*ptr != 0) {
-		printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[1]);
+		printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[1]);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	value = (int)strtoul(shell->args[2], &ptr, 16);
 	if (*ptr != 0) {
-		printf("%s: Àß¸øµÈ ÀÎÀÚ\n", shell->args[2]);
+		printf("%s: ì˜ëª»ëœ ì¸ì\n", shell->args[2]);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 
 	/* check range */
 	if (start_addr < 0 || start_addr >= MEM_SIZE) {
-		printf("%X: ÁÖ¼Ò°ªÀÌ À¯È¿ ¹üÀ§: [0, FFFFF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", start_addr);
+		printf("%X: ì£¼ì†Œê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FFFFF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", start_addr);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	if (end_addr < 0 || end_addr >= MEM_SIZE) {
-		printf("%X: ÁÖ¼Ò°ªÀÌ À¯È¿ ¹üÀ§: [0, FFFFF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", end_addr);
+		printf("%X: ì£¼ì†Œê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FFFFF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", end_addr);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	if (start_addr > end_addr) {
-		printf("Àß¸øµÈ ¹üÀ§: ½ÃÀÛ ÁÖ¼Ò°ªÀÌ ³¡ ÁÖ¼Ò°ªÀ» ÃÊ°úÇÏ¿´½À´Ï´Ù.\n");
+		printf("ì˜ëª»ëœ ë²”ìœ„: ì‹œì‘ ì£¼ì†Œê°’ì´ ë ì£¼ì†Œê°’ì„ ì´ˆê³¼í•˜ì˜€ìŠµë‹ˆë‹¤.\n");
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
 	if (value < 0 || value > 255) {
-		printf("%X: °ªÀÌ À¯È¿ ¹üÀ§: [0, FF] ¸¦ ¹ş¾î³µ½À´Ï´Ù.\n", value);
+		printf("%X: ê°’ì´ ìœ íš¨ ë²”ìœ„: [0, FF] ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤.\n", value);
 		shell->error = ERR_RUN_FAIL;
 		return;
 	}
@@ -465,12 +473,12 @@ void runCmdFill(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ¸Ş¸ğ¸® ÀüÃ¼¸¦ ÀüºÎ 0À¸·Î º¯°æ½ÃÅ²´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ë©”ëª¨ë¦¬ ì „ì²´ë¥¼ ì „ë¶€ 0ìœ¼ë¡œ ë³€ê²½ì‹œí‚¨ë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdReset(Shell* shell)
+static void runCmdReset(Shell* shell)
 {
 	if (shell->argc != 0) {
 		shell->error = ERR_INVALID_USE;
@@ -481,12 +489,12 @@ void runCmdReset(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ÀÎÀÚ·Î ¹ŞÀº opcodeÀÇ mnemonic¿¡ ´ëÇÑ code°ªÀ» Ãâ·ÂÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ì¸ìë¡œ ë°›ì€ opcodeì˜ mnemonicì— ëŒ€í•œ codeê°’ì„ ì¶œë ¥í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdOpcode(Shell* shell)
+static void runCmdOpcode(Shell* shell)
 {
 	if (shell->argc != 1) {
 		shell->error = ERR_INVALID_USE;
@@ -495,18 +503,18 @@ void runCmdOpcode(Shell* shell)
 
 	int* code = (int*)getValue(&shell->op_table, shell->args[0]);
 	if (code == NULL)
-		printf("        ÇØ´ç Á¤º¸¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.\n");
+		printf("        í•´ë‹¹ ì •ë³´ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n");
 	else
 		printf("        opcode is %X\n", *code);
 }
 
 /*************************************************************************************
-* ¼³¸í: ÇöÀç hash table¿¡ ÀúÀåµÈ opcode¸¦ ¸ğµÎ Ãâ·ÂÇÑ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: í˜„ì¬ hash tableì— ì €ì¥ëœ opcodeë¥¼ ëª¨ë‘ ì¶œë ¥í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCmdOplist(Shell* shell)
+static void runCmdOplist(Shell* shell)
 {
 	int i;
 	if (shell->argc != 0) {
@@ -526,7 +534,7 @@ void runCmdOplist(Shell* shell)
 
 			while (ptr != NULL) {
 				Entry* entry = (Entry*)ptr->data;
-				printf(" ¡æ [%s, %02X]", (char*)entry->key, *(int*)entry->value);
+				printf(" â†’ [%s, %02X]", (char*)entry->key, *(int*)entry->value);
 				ptr = ptr->next;
 			}
 		}
@@ -535,12 +543,107 @@ void runCmdOplist(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: shell¿¡ ÀúÀåµÈ cmd_code¸¦ ÀÌ¿ëÇÏ¿© ÇØ´ç code¿¡ ¸ÅÇÎµÈ ÇÔ¼ö¸¦ È£Ãâ
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: shellì— ì €ì¥ëœ cmd_codeë¥¼ ì´ìš©í•˜ì—¬ í•´ë‹¹ codeì— ë§¤í•‘ëœ í•¨ìˆ˜ë¥¼ í˜¸ì¶œ
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
-void runCommand(Shell* shell)
+static void runCmdAssemble(Shell* shell)
+{
+	if (shell->argc != 1) {
+		shell->error = ERR_INVALID_USE;
+		return;
+	}
+}
+
+/*************************************************************************************
+* ì„¤ëª…: argumentì— ì €ì¥ëœ íŒŒì¼ê²½ë¡œë¥¼ ì—´ê³  ë‚´ìš©ì„ í™”ë©´ì— ì¶œë ¥í•œë‹¤. íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ëŠ”
+*       ê²½ìš° ì—ëŸ¬ ë©”ì„¸ì§€ë¥¼ ì¶œë ¥í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
+*************************************************************************************/
+static void runCmdType(Shell* shell)
+{
+	FILE* fp;
+	char buffer[BUFFER_SIZE];
+	int indent;
+
+	if (shell->argc != 1) {
+		shell->error = ERR_INVALID_USE;
+		return;
+	}
+
+	fp = fopen(shell->args[0], "r");
+	if (fp == NULL) {
+		printf("        í•´ë‹¹ íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n");
+		shell->error = ERR_RUN_FAIL;
+		return;
+	}
+
+	indent = true;
+	while (!feof(fp)) {
+		if (indent)
+			printf("        ");
+
+		if (fgets(buffer, BUFFER_SIZE, fp) == NULL) {
+			printf("\n");
+		}
+		else {
+			printf("%s", buffer);
+			indent = (buffer[strlen(buffer) - 1] == '\n');
+		}
+	}
+}
+
+/*************************************************************************************
+* ì„¤ëª…: shellì— ì €ì¥ëœ cmd_codeë¥¼ ì´ìš©í•˜ì—¬ í•´ë‹¹ codeì— ë§¤í•‘ëœ í•¨ìˆ˜ë¥¼ í˜¸ì¶œ
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
+*************************************************************************************/
+static void runCmdSymbol(Shell* shell)
+{
+	if (shell->argc != 0) {
+		shell->error = ERR_INVALID_USE;
+		return;
+	}
+}
+
+/*************************************************************************************
+* ì„¤ëª…: shellì— ì €ì¥ëœ cmd_codeë¥¼ ì´ˆê¸°í™”í•˜ê³ , command í•¨ìˆ˜ë¥¼ ë§¤í•‘í•œë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
+*************************************************************************************/
+static void initializeCommand(Shell* shell)
+{
+	/* init command code */
+	shell->cmd_code = CMD_INVALID;
+
+	/* command function mapping */
+	shell->cmds[CMD_HELP] = runCmdHelp;
+	shell->cmds[CMD_DIR] = runCmdDir;
+	shell->cmds[CMD_QUIT] = runCmdQuit;
+	shell->cmds[CMD_HISTORY] = runCmdHistory;
+	shell->cmds[CMD_DUMP] = runCmdDump;
+	shell->cmds[CMD_EDIT] = runCmdEdit;
+	shell->cmds[CMD_FILL] = runCmdFill;
+	shell->cmds[CMD_RESET] = runCmdReset;
+	shell->cmds[CMD_OPCODE] = runCmdOpcode;
+	shell->cmds[CMD_OPLIST] = runCmdOplist;
+	shell->cmds[CMD_ASSEMBLE] = runCmdAssemble;
+	shell->cmds[CMD_TYPE] = runCmdType;
+	shell->cmds[CMD_SYMBOL] = runCmdSymbol;
+}
+
+/*************************************************************************************
+* ì„¤ëª…: shellì— ì €ì¥ëœ cmd_codeë¥¼ ì´ìš©í•˜ì—¬ í•´ë‹¹ codeì— ë§¤í•‘ëœ í•¨ìˆ˜ë¥¼ í˜¸ì¶œ
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
+*************************************************************************************/
+static void runCommand(Shell* shell)
 {
 	if (shell->cmd_code < 0 || shell->cmd_code >= CMD_CNT) {
 		shell->error = ERR_NO_CMD;
@@ -554,10 +657,10 @@ void runCommand(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ÇØ´ç ¿¡·¯ ÄÚµå¿¡ ÇØ´çÇÏ´Â ¹®±¸¸¦ Ãâ·Â
-* ÀÎÀÚ:
-* - err_code: error¸¦ ³ªÅ¸³»´Â Á¤¼ö
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: í•´ë‹¹ ì—ëŸ¬ ì½”ë“œì— í•´ë‹¹í•˜ëŠ” ë¬¸êµ¬ë¥¼ ì¶œë ¥
+* ì¸ì:
+* - err_code: errorë¥¼ ë‚˜íƒ€ë‚´ëŠ” ì •ìˆ˜
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 static void printError(int err_code)
 {
@@ -567,36 +670,36 @@ static void printError(int err_code)
 		break;
 
 	case ERR_INIT:
-		printf("ShellÀ» ÃÊ±âÈ­ÇÏ´Âµ¥ ½ÇÆĞÇß½À´Ï´Ù. Á¾·áÇÕ´Ï´Ù.\n");
+		printf("        ì˜¤ë¥˜: Shellì„ ì´ˆê¸°í™”í•˜ëŠ”ë° ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤. ì¢…ë£Œí•©ë‹ˆë‹¤.\n");
 		break;
 
 	case ERR_NO_CMD:
-		printf("¾Ë ¼ö ¾ø´Â ¸í·ÉÀÔ´Ï´Ù. h[elp]¸¦ ÀÔ·ÂÇÏ¿© °¡´ÉÇÑ ¸í·ÉÀ» È®ÀÎÇÏ¼¼¿ä.\n");
+		printf("        ì˜¤ë¥˜: ì•Œ ìˆ˜ ì—†ëŠ” ëª…ë ¹ì…ë‹ˆë‹¤. h[elp]ë¥¼ ì…ë ¥í•˜ì—¬ ê°€ëŠ¥í•œ ëª…ë ¹ì„ í™•ì¸í•˜ì„¸ìš”.\n");
 		break;
 
 	case ERR_INVALID_USE:
-		printf("¸í·É ÀÎÀÚ°¡ Àß¸øµÇ¾ú½À´Ï´Ù. h[elp]¸¦ ÀÔ·ÂÇÏ¿© »ç¿ë¹ıÀ» È®ÀÎÇÏ¼¼¿ä.\n");
+		printf("        ì˜¤ë¥˜: ëª…ë ¹ ì¸ìê°€ ì˜ëª»ë˜ì—ˆìŠµë‹ˆë‹¤. h[elp]ë¥¼ ì…ë ¥í•˜ì—¬ ì‚¬ìš©ë²•ì„ í™•ì¸í•˜ì„¸ìš”.\n");
 		break;
 
 	case ERR_RUN_FAIL:
-		printf("¸í·ÉÀ» ½ÇÇàÇÒ ¼ö ¾ø½À´Ï´Ù.\n");
+		printf("        ì˜¤ë¥˜: ëª…ë ¹ì„ ì‹¤í–‰í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n");
 		break;
 
 	default:
-		printf("¾Ë ¼ö ¾ø´Â ¿À·ù\n");
+		printf("        ì˜¤ë¥˜: ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜\n");
 		break;
 	}
 }
 
 
 /*************************************************************************************
-* ¼³¸í: opcode.txt ÆÄÀÏ·ÎºÎÅÍ opcode¿¡ ´ëÇÑ Á¤º¸(code, mnemonic, type) µîÀ»
-*       ÀĞ¾î¼­ hash table¿¡ ÀúÀåÇÑ´Ù. °¢ Á¤º¸´Â °ø¹éÀ¸·Î ±¸ºĞµÈ´Ù°í °¡Á¤ÇÏ°í
-*       strtok¸¦ ÀÌ¿ëÇÏ¿© ÆÄÀÏÀ» ÁÙ ´ÜÀ§·Î ÀĞ¾î ÆÄ½ÌÇÑ´Ù. ÀĞÀº ÁÙ¿¡ ´ëÇØ¼­
-*       ÆÄ½ÌÇÏ´Â µµÁß¿¡ ¿¹¿Ü°¡ ¹ß»ıÇÏ¸é ÇØ´ç ÁÙÀº °Ç³Ê¶Ù°í ´ÙÀ½ ÁÙÀ» ÀĞ´Â´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: opcode.txt íŒŒì¼ë¡œë¶€í„° opcodeì— ëŒ€í•œ ì •ë³´(code, mnemonic, type) ë“±ì„
+*       ì½ì–´ì„œ hash tableì— ì €ì¥í•œë‹¤. ê° ì •ë³´ëŠ” ê³µë°±ìœ¼ë¡œ êµ¬ë¶„ëœë‹¤ê³  ê°€ì •í•˜ê³ 
+*       strtokë¥¼ ì´ìš©í•˜ì—¬ íŒŒì¼ì„ ì¤„ ë‹¨ìœ„ë¡œ ì½ì–´ íŒŒì‹±í•œë‹¤. ì½ì€ ì¤„ì— ëŒ€í•´ì„œ
+*       íŒŒì‹±í•˜ëŠ” ë„ì¤‘ì— ì˜ˆì™¸ê°€ ë°œìƒí•˜ë©´ í•´ë‹¹ ì¤„ì€ ê±´ë„ˆë›°ê³  ë‹¤ìŒ ì¤„ì„ ì½ëŠ”ë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 static void parseOpcode(Shell* shell)
 {
@@ -640,12 +743,12 @@ static void parseOpcode(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: »ç¿ëÀÚ·ÎºÎÅÍ ÇÑ ÁÙÀÇ command-lineÀ» ÀÔ·Â¹Ş°í, ÆÄ½ÌÇÏ¿© command¿Í argument¸¦
-*       ¾ò´Â´Ù. ¿¹¿Ü°¡ ¹ß»ıÇÏÁö ¾Ê´Â´Ù¸é, command-lineÀ» µû·Î ÀúÀåÇÏ°í, command¿¡
-*       ´ëÇÑ code°ª°ú ÃÖ´ë 3°³ÀÇ argument¸¦ ÀúÀåÇÏ°Ô µÈ´Ù.
-* ÀÎÀÚ:
-* - shell: shell¿¡ ´ëÇÑ Á¤º¸¸¦ ´ã°í ÀÖ´Â ±¸Á¶Ã¼¿¡ ´ëÇÑ Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: ì‚¬ìš©ìë¡œë¶€í„° í•œ ì¤„ì˜ command-lineì„ ì…ë ¥ë°›ê³ , íŒŒì‹±í•˜ì—¬ commandì™€ argumentë¥¼
+*       ì–»ëŠ”ë‹¤. ì˜ˆì™¸ê°€ ë°œìƒí•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, command-lineì„ ë”°ë¡œ ì €ì¥í•˜ê³ , commandì—
+*       ëŒ€í•œ codeê°’ê³¼ ìµœëŒ€ 3ê°œì˜ argumentë¥¼ ì €ì¥í•˜ê²Œ ëœë‹¤.
+* ì¸ì:
+* - shell: shellì— ëŒ€í•œ ì •ë³´ë¥¼ ë‹´ê³  ìˆëŠ” êµ¬ì¡°ì²´ì— ëŒ€í•œ í¬ì¸í„°
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 static void parseCommandLine(Shell* shell)
 {
@@ -653,39 +756,39 @@ static void parseCommandLine(Shell* shell)
 	char* ptr;
 	char* ptr2;
 
-	/* ¶óÀÎ ÀÔ·Â */
+	/* ë¼ì¸ ì…ë ¥ */
 	fgets(buffer, LINE_MAX, stdin);
 
-	/* \n Á¦°Å */
+	/* \n ì œê±° */
 	buffer[strlen(buffer) - 1] = 0;
 
-	/* shellÀÇ command line¿¡ º¹»çÇÏ¿© ÀúÀå */
+	/* shellì˜ command lineì— ë³µì‚¬í•˜ì—¬ ì €ì¥ */
 	strncpy(shell->cmd_line, buffer, LINE_MAX);
 
-	/* ¸í·É¾î¸¦ ÆÄ½Ì*/
+	/* ëª…ë ¹ì–´ë¥¼ íŒŒì‹±*/
 	ptr = strtok(buffer, " \t");
 
-	/* ºó ¹®ÀÚ¿­ÀÎ °æ¿ì ¿¡·¯·Î Ã³¸® */
+	/* ë¹ˆ ë¬¸ìì—´ì¸ ê²½ìš° ì—ëŸ¬ë¡œ ì²˜ë¦¬ */
 	if (ptr == NULL) {
 		shell->error = ERR_EMPTY;
 		return;
 	}
 
-	/* ¸í·É ¹®ÀÚ¿­À» ÄÚµå·Î ÀüÈ¯ */
+	/* ëª…ë ¹ ë¬¸ìì—´ì„ ì½”ë“œë¡œ ì „í™˜ */
 	shell->cmd_code = getCommandCode(ptr);
 	if (shell->cmd_code == CMD_INVALID) {
 		shell->error = ERR_NO_CMD;
 		return;
 	}
 
-	/* ¸í·É¿¡ ´ëÇÑ ÀÎÀÚ¸¦ ÆÄ½Ì */
+	/* ëª…ë ¹ì— ëŒ€í•œ ì¸ìë¥¼ íŒŒì‹± */
 	ptr = strtok(NULL, "");
 	if (ptr == NULL) {
 		shell->argc = 0;
 		return;
 	}
 
-	/* ÀÎÀÚ´Â ','·Î ±¸ºĞ */
+	/* ì¸ìëŠ” ','ë¡œ êµ¬ë¶„ */
 	/* argument0 */
 	for (ptr2 = ptr; *ptr2 != 0 && *ptr2 != ','; ptr2++);
 	if (*ptr2 == 0) {
@@ -718,7 +821,7 @@ static void parseCommandLine(Shell* shell)
 		shell->argc = 3;
 		strcpy(shell->args[2], trim(ptr, ptr2 - 1));
 	}
-	/* argument°¡ 3°³¸¦ ³ÑÀ¸¸é ¿¡·¯ */
+	/* argumentê°€ 3ê°œë¥¼ ë„˜ìœ¼ë©´ ì—ëŸ¬ */
 	else {
 		shell->error = ERR_INVALID_USE;
 		return;
@@ -726,12 +829,12 @@ static void parseCommandLine(Shell* shell)
 }
 
 /*************************************************************************************
-* ¼³¸í: ÇÑ ¹®ÀÚ¿­ÀÇ ½ÃÀÛ°ú ³¡À» ÀÔ·Â¹Ş¾Æ¼­ ¾ç ³¡¿¡ Á¸ÀçÇÏ´Â °ø¹éÀ» ¸ğµÎ Á¦°ÅÇÑ´Ù.
-*       Áß°£¿¡ ÀÖ´Â °ø¹éÀº Á¦°ÅÇÏÁö ¾ÊÀ½.
-* ÀÎÀÚ:
-* - start: ¹®ÀÚ¿­ÀÇ ½ÃÀÛÀ» °¡¸®Å°´Â Æ÷ÀÎÅÍ
-* - end: ¹®ÀÚ¿­ÀÇ ³¡À» °¡¸®Å°´Â Æ÷ÀÎÅÍ
-* ¹İÈ¯°ª: trimÀÌ Àû¿ëµÈ ¹®ÀÚ¿­ÀÇ ½ÃÀÛ Æ÷ÀÎÅÍ¸¦ ¹İÈ¯
+* ì„¤ëª…: í•œ ë¬¸ìì—´ì˜ ì‹œì‘ê³¼ ëì„ ì…ë ¥ë°›ì•„ì„œ ì–‘ ëì— ì¡´ì¬í•˜ëŠ” ê³µë°±ì„ ëª¨ë‘ ì œê±°í•œë‹¤.
+*       ì¤‘ê°„ì— ìˆëŠ” ê³µë°±ì€ ì œê±°í•˜ì§€ ì•ŠìŒ.
+* ì¸ì:
+* - start: ë¬¸ìì—´ì˜ ì‹œì‘ì„ ê°€ë¦¬í‚¤ëŠ” í¬ì¸í„°
+* - end: ë¬¸ìì—´ì˜ ëì„ ê°€ë¦¬í‚¤ëŠ” í¬ì¸í„°
+* ë°˜í™˜ê°’: trimì´ ì ìš©ëœ ë¬¸ìì—´ì˜ ì‹œì‘ í¬ì¸í„°ë¥¼ ë°˜í™˜
 *************************************************************************************/
 static char* trim(char* start, char* end)
 {
@@ -746,10 +849,10 @@ static char* trim(char* start, char* end)
 }
 
 /*************************************************************************************
-* ¼³¸í: ¸í·É¾î ¹®ÀÚ¿­À» ÀÔ·Â¹Ş¾Æ Á¤¼öÇü ¸í·É code °ªÀ» ¹İÈ¯ÇÑ´Ù.
-* ÀÎÀÚ:
-* - cmd: ¸í·É¾î ¹®ÀÚ¿­
-* ¹İÈ¯°ª: ÇØ´ç ¸í·É¾î ¹®ÀÚ¿­¿¡ ¸ÅÇÎµÇ´Â Á¤¼ö°ªÀ» ¹İÈ¯
+* ì„¤ëª…: ëª…ë ¹ì–´ ë¬¸ìì—´ì„ ì…ë ¥ë°›ì•„ ì •ìˆ˜í˜• ëª…ë ¹ code ê°’ì„ ë°˜í™˜í•œë‹¤.
+* ì¸ì:
+* - cmd: ëª…ë ¹ì–´ ë¬¸ìì—´
+* ë°˜í™˜ê°’: í•´ë‹¹ ëª…ë ¹ì–´ ë¬¸ìì—´ì— ë§¤í•‘ë˜ëŠ” ì •ìˆ˜ê°’ì„ ë°˜í™˜
 *************************************************************************************/
 static int getCommandCode(char* cmd)
 {
@@ -775,16 +878,22 @@ static int getCommandCode(char* cmd)
 		return CMD_OPCODE;
 	else if (!strncmp(cmd, "opcodelist", CMD_LEN_MAX))
 		return CMD_OPLIST;
+	else if (!strncmp(cmd, "assemble", CMD_LEN_MAX))
+		return CMD_ASSEMBLE;
+	else if (!strncmp(cmd, "type", CMD_LEN_MAX))
+		return CMD_TYPE;
+	else if (!strncmp(cmd, "symbol", CMD_LEN_MAX))
+		return CMD_SYMBOL;
 	else
 		return CMD_INVALID;
 }
 
 /*************************************************************************************
-* ¼³¸í: ÀÎÀÚ·Î Àü´ŞµÈ key·ÎºÎÅÍ ÀûÀıÇÑ hash °ªÀ» ¾ò¾î³½´Ù.
-*       ±âº»À¸·Î Á¦°øµÇ´Â hash function ÀÌ´Ù.
-* ÀÎÀÚ:
+* ì„¤ëª…: ì¸ìë¡œ ì „ë‹¬ëœ keyë¡œë¶€í„° ì ì ˆí•œ hash ê°’ì„ ì–»ì–´ë‚¸ë‹¤.
+*       ê¸°ë³¸ìœ¼ë¡œ ì œê³µë˜ëŠ” hash function ì´ë‹¤.
+* ì¸ì:
 * - key: key
-* ¹İÈ¯°ª: ÇØ´ç key¸¦ ÀÌ¿ëÇÏ¿© °è»êÇÑ hash °ª
+* ë°˜í™˜ê°’: í•´ë‹¹ keyë¥¼ ì´ìš©í•˜ì—¬ ê³„ì‚°í•œ hash ê°’
 *************************************************************************************/
 static int hashFunc(void* key)
 {
@@ -798,12 +907,12 @@ static int hashFunc(void* key)
 }
 
 /*************************************************************************************
-* ¼³¸í: ÀÓÀÇÀÇ key°ªÀ» ³ÖÀ¸¸é hash tableÀÇ entry Áß¿¡¼­ °°Àº key¸¦ °®°í ÀÖ´Â
-*       entry¸¦ Ã£±â À§ÇÑ ºñ±³ ÇÔ¼öÀÌ´Ù.
-* ÀÎÀÚ:
-* - key0: entryÀÇ key È¤Àº »ç¿ëÀÚ°¡ °Ë»öÀ» ¿øÇÏ´Â key. °°ÀºÁö¸¸ ºñ±³ÇÏ¹Ç·Î ¼ø¼­»ó°ü¾øÀ½.
-* - key1: »ç¿ëÀÚ°¡ °Ë»öÀ» ¿øÇÏ´Â key È¤Àº entryÀÇ key. °°ÀºÁö¸¸ ºñ±³ÇÏ¹Ç·Î ¼ø¼­»ó°ü¾øÀ½.
-* ¹İÈ¯°ª: °°À¸¸é 0, ´Ù¸£¸é ±× ÀÌ¿ÜÀÇ °ª
+* ì„¤ëª…: ì„ì˜ì˜ keyê°’ì„ ë„£ìœ¼ë©´ hash tableì˜ entry ì¤‘ì—ì„œ ê°™ì€ keyë¥¼ ê°–ê³  ìˆëŠ”
+*       entryë¥¼ ì°¾ê¸° ìœ„í•œ ë¹„êµ í•¨ìˆ˜ì´ë‹¤.
+* ì¸ì:
+* - key0: entryì˜ key í˜¹ì€ ì‚¬ìš©ìê°€ ê²€ìƒ‰ì„ ì›í•˜ëŠ” key. ê°™ì€ì§€ë§Œ ë¹„êµí•˜ë¯€ë¡œ ìˆœì„œìƒê´€ì—†ìŒ.
+* - key1: ì‚¬ìš©ìê°€ ê²€ìƒ‰ì„ ì›í•˜ëŠ” key í˜¹ì€ entryì˜ key. ê°™ì€ì§€ë§Œ ë¹„êµí•˜ë¯€ë¡œ ìˆœì„œìƒê´€ì—†ìŒ.
+* ë°˜í™˜ê°’: ê°™ìœ¼ë©´ 0, ë‹¤ë¥´ë©´ ê·¸ ì´ì™¸ì˜ ê°’
 *************************************************************************************/
 static int hashCmp(void* key0, void* key1)
 {
@@ -814,13 +923,13 @@ static int hashCmp(void* key0, void* key1)
 }
 
 /*************************************************************************************
-* ¼³¸í: history´Â list·Î ±¸¼ºµÇ¾î ÀÖ´Âµ¥, ¾È¿¡ ´ã±ä data·Î ¹®ÀÚ¿­À» ÇÒ´çÇÏ¿´À¸¹Ç·Î,
-*       ÇÒ´çÇÑ ¸Ş¸ğ¸®¸¦ ÇØÁ¦ÇØ ÁÖ¾î¾ß ÇÑ´Ù. list ÀÇ ¸ğµç entry¿¡ Àû¿ëµÇ´Â
-*       action functionÀ¸·Î data¿¡ ÇÒ´çÇÑ ¸Ş¸ğ¸®¸¦ ÇØÁ¦ÇÏ´Â ¿ªÇÒÀ» ÇÑ´Ù.
-* ÀÎÀÚ:
-* - data: list °¢ itemÀÇ µ¥ÀÌÅÍ
-* - aux: Ãß°¡ÀûÀ¸·Î ÇÊ¿äÇÏ¸é È°¿ëÇÏ±â À§ÇÑ º¯¼ö. auxiliary
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: historyëŠ” listë¡œ êµ¬ì„±ë˜ì–´ ìˆëŠ”ë°, ì•ˆì— ë‹´ê¸´ dataë¡œ ë¬¸ìì—´ì„ í• ë‹¹í•˜ì˜€ìœ¼ë¯€ë¡œ,
+*       í• ë‹¹í•œ ë©”ëª¨ë¦¬ë¥¼ í•´ì œí•´ ì£¼ì–´ì•¼ í•œë‹¤. list ì˜ ëª¨ë“  entryì— ì ìš©ë˜ëŠ”
+*       action functionìœ¼ë¡œ dataì— í• ë‹¹í•œ ë©”ëª¨ë¦¬ë¥¼ í•´ì œí•˜ëŠ” ì—­í• ì„ í•œë‹¤.
+* ì¸ì:
+* - data: list ê° itemì˜ ë°ì´í„°
+* - aux: ì¶”ê°€ì ìœ¼ë¡œ í•„ìš”í•˜ë©´ í™œìš©í•˜ê¸° ìœ„í•œ ë³€ìˆ˜. auxiliary
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 static void releaseHistory(void* data, void* aux)
 {
@@ -830,13 +939,13 @@ static void releaseHistory(void* data, void* aux)
 }
 
 /*************************************************************************************
-* ¼³¸í: opcodelist´Â hash table·Î ±¸¼ºµÇ´Âµ¥, °¢ entryÀÇ key·Î ¹®ÀÚ¿­À» ÇÒ´çÇßÀ¸¹Ç·Î,
-*       ÇÒ´çÇÑ ¸Ş¸ğ¸®¸¦ ÇØÁ¦ÇØ ÁÖ¾î¾ß ÇÑ´Ù. hash tableÀÇ ¸ğµç entry¿¡ Àû¿ëµÇ´Â
-*       action functionÀ¸·Î data¿¡ ÇÒ´çÇÑ ¸Ş¸ğ¸®¸¦ ÇØÁ¦ÇÏ´Â ¿ªÇÒÀ» ÇÑ´Ù.
-* ÀÎÀÚ:
-* - data: list °¢ itemÀÇ µ¥ÀÌÅÍ
-* - aux: Ãß°¡ÀûÀ¸·Î ÇÊ¿äÇÏ¸é È°¿ëÇÏ±â À§ÇÑ º¯¼ö. auxiliary
-* ¹İÈ¯°ª: ¾øÀ½
+* ì„¤ëª…: opcodelistëŠ” hash tableë¡œ êµ¬ì„±ë˜ëŠ”ë°, ê° entryì˜ keyë¡œ ë¬¸ìì—´ì„ í• ë‹¹í–ˆìœ¼ë¯€ë¡œ,
+*       í• ë‹¹í•œ ë©”ëª¨ë¦¬ë¥¼ í•´ì œí•´ ì£¼ì–´ì•¼ í•œë‹¤. hash tableì˜ ëª¨ë“  entryì— ì ìš©ë˜ëŠ”
+*       action functionìœ¼ë¡œ dataì— í• ë‹¹í•œ ë©”ëª¨ë¦¬ë¥¼ í•´ì œí•˜ëŠ” ì—­í• ì„ í•œë‹¤.
+* ì¸ì:
+* - data: list ê° itemì˜ ë°ì´í„°
+* - aux: ì¶”ê°€ì ìœ¼ë¡œ í•„ìš”í•˜ë©´ í™œìš©í•˜ê¸° ìœ„í•œ ë³€ìˆ˜. auxiliary
+* ë°˜í™˜ê°’: ì—†ìŒ
 *************************************************************************************/
 static void releaseOplist(void* data, void* aux)
 {
