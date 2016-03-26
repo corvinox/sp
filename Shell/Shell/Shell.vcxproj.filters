@@ -27,6 +27,15 @@
     <ClCompile Include="shell.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="assember.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="parser.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="strutil.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="list.h">
@@ -36,6 +45,15 @@
       <Filter>소스 파일</Filter>
     </ClInclude>
     <ClInclude Include="shell.h">
+      <Filter>소스 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="assembler.h">
+      <Filter>소스 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="parser.h">
+      <Filter>소스 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="strutil.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
   </ItemGroup>

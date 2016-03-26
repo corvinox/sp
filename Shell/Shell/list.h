@@ -19,6 +19,7 @@ typedef struct Node_ {
 typedef struct List_ {
 	Node* head;
 	Node* tail;
+	int size;
 } List;
 
 extern void initializeList(List* list);

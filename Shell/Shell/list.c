@@ -12,6 +12,7 @@ void initializeList(List* list)
 {
 	list->head = NULL;
 	list->tail = NULL;
+	list->size = 0;
 }
 
 /*************************************************************************************
@@ -35,6 +36,8 @@ void addList(List* list, void* data)
 		list->tail->next = new_node;
 		list->tail = new_node;
 	}
+	
+	list->size++;
 }
 
 /*************************************************************************************
@@ -54,6 +57,7 @@ void clearList(List* list)
 
 	list->head = NULL;
 	list->tail = NULL;
+	list->size = 0;
 }
 
 /*************************************************************************************
