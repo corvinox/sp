@@ -1,12 +1,11 @@
 ﻿#include "shell.h"
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <dirent.h>
+//#include <dirent.h>
 #include <sys/stat.h>
 
-#define strdup _strdup
+#include "strutil.h"
 
 #define BUFFER_SIZE 12
 
@@ -74,18 +73,6 @@ void initializeShell(Shell* shell)
 
 	/* init command */
 	initializeCommand(shell);
-
-	/* command function mapping */
-	shell->cmds[CMD_HELP] = runCmdHelp;
-	shell->cmds[CMD_DIR] = runCmdDir;
-	shell->cmds[CMD_QUIT] = runCmdQuit;
-	shell->cmds[CMD_HISTORY] = runCmdHistory;
-	shell->cmds[CMD_DUMP] = runCmdDump;
-	shell->cmds[CMD_EDIT] = runCmdEdit;
-	shell->cmds[CMD_FILL] = runCmdFill;
-	shell->cmds[CMD_RESET] = runCmdReset;
-	shell->cmds[CMD_OPCODE] = runCmdOpcode;
-	shell->cmds[CMD_OPLIST] = runCmdOplist;
 
 	/* opcode에 대한 정보를 저장 */
 	parseOpcode(shell);
@@ -554,6 +541,8 @@ static void runCmdAssemble(Shell* shell)
 		shell->error = ERR_INVALID_USE;
 		return;
 	}
+
+	assemble(&shell->assembler, shell->args[0]);
 }
 
 /*************************************************************************************

@@ -1,4 +1,4 @@
-#ifndef ASSEBLER_H_
+﻿#ifndef ASSEBLER_H_
 #define ASSEBLER_H_
 
 #include "hash.h"
@@ -12,7 +12,7 @@ typedef struct
 	int is_comment;
 	int has_label;
 
-} Instruction;
+} Statement;
 
 
 
@@ -24,5 +24,8 @@ typedef struct
 	int locctr;
 	HashTable op_table;
 } Assembler;
+
+extern void initializeAssembler(Assembler* asm);
+extern void assemble(Assembler* asm, const char* filename);
 
 #endif

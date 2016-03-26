@@ -1,5 +1,6 @@
 ﻿#include "parser.h"
-#include <string.h>
+#include <stdio.h>
+#include "strutil.h"
 
 void initializeParser(Parser* parser)
 {

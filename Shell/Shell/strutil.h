@@ -1,8 +1,15 @@
-#ifndef STRUTIL_H_
+﻿#ifndef STRUTIL_H_
 #define STRUTIL_H_
 
-extern char* trim(char* start, char* end);
-extern char* trimAndDup(char* start, char* end);
-extern char* trimAndCopy(char* start, char* end, char* dst);
+#include <string.h>
+
+#define strdup _strdup
+
+extern char* strPartialDup(const char* start, const char* end);
+extern char* strTrim(char* start, char* end);
+extern char* strTrimDup(char* start, char* end);
+extern char* strTrimCopy(char* start, char* end, char* dst);
+extern char* strTokenDup(const char* str, const char* delimeter, char** save);
+extern char* strParseDup(const char* str, char** save);
 
 #endif

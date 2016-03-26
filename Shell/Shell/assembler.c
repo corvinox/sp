@@ -1,5 +1,6 @@
-#include "assembler.h"
+ï»¿#include "assembler.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "strutil.h"
 
@@ -13,19 +14,33 @@
 
 #define BUFFER_MAX 1024
 
-void assemble(Assembler* asm) {
+static void pass1(Assembler* asm, const char* filename);
+static void pass2(Assembler* asm, const char* filename); 
+static void parseStatement(Statement* stmt, const char* buffer);
 
+void initializeAssembler(Assembler* asm)
+{
 
+}
+
+void assemble(Assembler* asm, const char* filename)
+{
+	pass1(asm, filename);
 }
 
 static void pass1(Assembler* asm, const char* filename)
 {
 	char buffer[BUFFER_MAX];
-	Instruction inst;
+	Statement stmt;
+	FILE* fp_asm = fopen(filename, "r");
+	//FILE* fp_lst = fopen(filename, "w");
+	//if (fp_asm == NULL || fp_lst == NULL) {
+	//	return;
+	//}
 
-	fgets(buffer, BUFFER_MAX, filename);
-	// parsing
-	if (!strcmp(inst.opcode, "START")){
+	fgets(buffer, BUFFER_MAX, fp_asm);
+	parseStatement(&stmt, buffer);
+	if (!strcmp(stmt.opcode, "START")){
 
 	}
 	else {
@@ -33,9 +48,9 @@ static void pass1(Assembler* asm, const char* filename)
 		asm->locctr = 0;
 	}
 
-	while (strcmp(inst.opcode, "END")) {
-		if (!inst.is_comment) {
-			if (inst.has_label) {
+	while (strcmp(stmt.opcode, "END")) {
+		if (!stmt.is_comment) {
+			if (stmt.has_label) {
 				// search SYMTAB for LABEL
 				int find = 1;
 				if (find) {
@@ -46,30 +61,33 @@ static void pass1(Assembler* asm, const char* filename)
 				}
 			}
 
-			int value = getValue(&asm->op_table, inst.opcode);
+			void* value = getValue(&asm->op_table, stmt.opcode);
 			if (value != NULL) {
 				asm->locctr += 3;
 			}
-			else if(!strcmp(inst.opcode, "WORD")) {
+			else if(!strcmp(stmt.opcode, "WORD")) {
 				asm->locctr += 3;
 			}
-			else if (!strcmp(inst.opcode, "RESW")) {
+			else if (!strcmp(stmt.opcode, "RESW")) {
 				//asm->locctr += 3 * #operand;
 			}
-			else if (!strcmp(inst.opcode, "RESB")) {
+			else if (!strcmp(stmt.opcode, "RESB")) {
 				//asm->locctr += #operand;
 			}
-			else if (!strcmp(inst.opcode, "BYTE")) {
+			else if (!strcmp(stmt.opcode, "BYTE")) {
 				// asm->locctr += length
 			}
 		}
 
 		// write int
-		fgets(buffer, BUFFER_MAX, filename);
+		fgets(buffer, BUFFER_MAX, fp_asm);
 		// parsing
 	}
 	// write int
 	asm->prog_len = asm->locctr - asm->start_addr;
+
+	fclose(fp_asm);
+	//fclose(fp_lst);
 }
 
 static void pass2(Assembler* asm, const char* filename)
@@ -77,32 +95,41 @@ static void pass2(Assembler* asm, const char* filename)
 
 }
 
-static void parseInstruction(Instruction* inst, const char* buffer) {
-	char *str;
+static void parseStatement(Statement* stmt, const char* buffer) {
+	char* str;
 	char* ptr;
+	char* savePtr;
 
 	if (buffer == NULL) {
 		return;
 	}
 
-	str = trimAndDup(buffer, buffer + strlen(buffer));
+	str = strTrimDup(buffer, buffer + strlen(buffer));
 	if (str == NULL) {
 		return;
 	}
 
-	/* commentÀÎÁö °Ë»ç */
+	/* commentì¸ì§€ ê²€ì‚¬ */
 	if (str[0] == '.') {
-		inst->is_comment = true;
+		stmt->is_comment = true;
 		return;
 	}
 	
 	/*  */
-	ptr = strtok(str, " \t\n");
+	ptr = strParseDup(str, &savePtr);
 	if (ptr == NULL) {
 		return;
 	}
 
-	
+	ptr = strParseDup(NULL, &savePtr);
+	if (ptr == NULL) {
+		return;
+	}
+
+	ptr = strParseDup(NULL, &savePtr);
+	if (ptr == NULL) {
+		return;
+	}
 
 	free(str);
 }

@@ -27,13 +27,13 @@
     <ClCompile Include="shell.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="assember.c">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="parser.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="strutil.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="assembler.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

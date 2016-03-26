@@ -3,6 +3,7 @@
 
 #include "list.h"
 #include "hash.h"
+#include "assembler.h"
 
 #ifndef true
 #define true 1
@@ -81,6 +82,7 @@ typedef struct Shell_ {
 	void(*cmds[CMD_CNT])(struct Shell_*);
 	List history;
 	HashTable op_table;
+	Assembler assembler;
 } Shell;
 
 /* Shell 관련 함수 */
