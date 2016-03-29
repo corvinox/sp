@@ -22,9 +22,9 @@ typedef struct List_ {
 	int size;
 } List;
 
-extern void initializeList(List* list);
-extern void addList(List* list, void* data);
-extern void clearList(List* list);
-extern void foreachList(List* list, void* aux, void(*action)(void*, void*));
+extern void listInitialize(List* list);
+extern void listAdd(List* list, void* data);
+extern void listClear(List* list);
+extern void listForeach(List* list, void* aux, void(*action)(void*, void*));
 
 #endif

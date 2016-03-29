@@ -29,10 +29,10 @@ typedef struct {
 	int(*cmp)(void*, void*);
 } HashTable;
 
-extern void initializeHash(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, void*));
-extern void insertHash(HashTable* hash, void* key, void* value);
-extern void clearHash(HashTable* hash);
-extern void foreachHash(HashTable* hash, void* aux, void(*action)(void*, void*));
-extern void* getValue(HashTable* hash, void* key);
+extern void hashInitialize(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, void*));
+extern void hashInsert(HashTable* hash, void* key, void* value);
+extern void hashClear(HashTable* hash);
+extern void hashForeach(HashTable* hash, void* aux, void(*action)(void*, void*));
+extern void* hashGetValue(HashTable* hash, void* key);
 
 #endif

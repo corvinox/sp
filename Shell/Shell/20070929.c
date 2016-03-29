@@ -5,14 +5,13 @@ int main()
 	Shell shell;
 	
 	/* 초기화 */
-	initializeShell(&shell);
+	shellInitialize(&shell);
 
-	/* shell이 초기화 되었으면 실행 */
-	if (shell.init)
-		startShell(&shell);
+	/* shell 실행 */
+	shellStart(&shell);
 
 	/* shell이 종료되면 사용된 모든 자원을 해제 */
-	releaseShell(&shell);
+	shellRelease(&shell);
 
 	return 0;
 }

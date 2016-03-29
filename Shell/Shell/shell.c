@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 //#include <dirent.h>
-#include <sys/stat.h>
+//#include <sys/stat.h>
 
 #include "strutil.h"
 
@@ -23,19 +23,15 @@ static void runCmdOplist(Shell* shell);
 static void runCmdAssemble(Shell* shell);
 static void runCmdType(Shell* shell);
 static void runCmdSymbol(Shell* shell);
-static void initializeCommand(Shell* shell);
-static void runCommand(Shell* shell);
+static void commandInitialize(Shell* shell);
+static void commandRun(Shell* shell);
 
 
-static void printError(int err_code);
+static void errorPrint(int err_code);
 static void parseOpcode(Shell* shell);
 static void parseCommandLine(Shell* shell);
-static char* trim(char* start, char* end);
 static int getCommandCode(char* cmd);
-static int hashFunc(void* key);
-static int hashCmp(void* a, void* b);
 static void releaseHistory(void* data, void* aux);
-static void releaseOplist(void* data, void* aux);
 
 /*************************************************************************************
 * 설명: Shell 구조체에 대한 초기화를 수행한다. 예를 들면, 각종 변수들의 값을
@@ -45,7 +41,7 @@ static void releaseOplist(void* data, void* aux);
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-void initializeShell(Shell* shell)
+void shellInitialize(Shell* shell)
 {
 	int i;
 
@@ -65,22 +61,20 @@ void initializeShell(Shell* shell)
 		return;
 	}
 	memset(shell->vm, 0, sizeof(char) * MEM_SIZE);
-
-
-	/* init list & hash table*/
-	initializeList(&shell->history);
-	initializeHash(&shell->op_table, hashFunc, hashCmp);
+	
+	/* init history*/
+	listInitialize(&shell->history);
 
 	/* init command */
-	initializeCommand(shell);
+	commandInitialize(shell);
 
-	/* opcode에 대한 정보를 저장 */
-	parseOpcode(shell);
+	/* 어셈블러 초기화 */
+	assemblerInitialize(&shell->assembler);
 
 	/* 초기화 과정을 모두 끝내고 에러가 있으면 초기화 실패 */
 	if (shell->error != ERR_NONE) {
 		shell->init = false;
-		printError(shell->error);
+		errorPrint(shell->error);
 	}
 	else {
 		shell->init = true;
@@ -89,13 +83,16 @@ void initializeShell(Shell* shell)
 
 /*************************************************************************************
 * 설명: 루프를 돌면서 사용자로부터 명령을 입력받고 파싱하고 실행하는 것을 반복한다.
-사용자가 quit 명령을 내릴 때 까지 반복한다.
+*       사용자가 quit 명령을 내릴 때 까지 반복한다. 초기화되지 않았으면 실행하지 않는다.
 * 인자:
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-void startShell(Shell* shell)
+void shellStart(Shell* shell)
 {
+	if (!shell->init)
+		return;
+
 	while (!shell->quit) {
 		printf("sicsim>");
 
@@ -104,11 +101,11 @@ void startShell(Shell* shell)
 
 		/* error가 없으면 command 실행 */
 		if (shell->error == ERR_NONE)
-			runCommand(shell);
+			commandRun(shell);
 
 		/* 위의 과정에서 error가 있으면 출력 */
 		if (shell->error != ERR_NONE)
-			printError(shell->error);
+			errorPrint(shell->error);
 
 		shell->error = ERR_NONE;
 	}
@@ -121,16 +118,15 @@ void startShell(Shell* shell)
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-void releaseShell(Shell* shell)
+void shellRelease(Shell* shell)
 {
+	assemblerRelease(&shell->assembler);
+
 	if (shell->vm != NULL)
 		free(shell->vm);
 
-	foreachList(&shell->history, NULL, releaseHistory);
-	clearList(&shell->history);
-
-	foreachHash(&shell->op_table, NULL, releaseOplist);
-	clearHash(&shell->op_table);
+	listForeach(&shell->history, NULL, releaseHistory);
+	listClear(&shell->history);
 }
 
 /*************************************************************************************
@@ -488,7 +484,7 @@ static void runCmdOpcode(Shell* shell)
 		return;
 	}
 
-	int* code = (int*)getValue(&shell->op_table, shell->args[0]);
+	int* code = (int*)hashGetValue(&shell->op_table, shell->args[0]);
 	if (code == NULL)
 		printf("        해당 정보를 찾을 수 없습니다.\n");
 	else
@@ -542,7 +538,7 @@ static void runCmdAssemble(Shell* shell)
 		return;
 	}
 
-	assemble(&shell->assembler, shell->args[0]);
+	assemblerAssemble(&shell->assembler, shell->args[0]);
 }
 
 /*************************************************************************************
@@ -605,7 +601,7 @@ static void runCmdSymbol(Shell* shell)
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-static void initializeCommand(Shell* shell)
+static void commandInitialize(Shell* shell)
 {
 	/* init command code */
 	shell->cmd_code = CMD_INVALID;
@@ -632,7 +628,7 @@ static void initializeCommand(Shell* shell)
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-static void runCommand(Shell* shell)
+static void commandRun(Shell* shell)
 {
 	if (shell->cmd_code < 0 || shell->cmd_code >= CMD_CNT) {
 		shell->error = ERR_NO_CMD;
@@ -641,7 +637,7 @@ static void runCommand(Shell* shell)
 	else {
 		shell->cmds[shell->cmd_code](shell);
 		if (shell->error == ERR_NONE)
-			addList(&shell->history, strdup(shell->cmd_line));
+			listAdd(&shell->history, strdup(shell->cmd_line));
 	}
 }
 
@@ -651,7 +647,7 @@ static void runCommand(Shell* shell)
 * - err_code: error를 나타내는 정수
 * 반환값: 없음
 *************************************************************************************/
-static void printError(int err_code)
+static void errorPrint(int err_code)
 {
 	switch (err_code) {
 	case ERR_NONE:
@@ -677,57 +673,6 @@ static void printError(int err_code)
 	default:
 		printf("        오류: 알 수 없는 오류\n");
 		break;
-	}
-}
-
-
-/*************************************************************************************
-* 설명: opcode.txt 파일로부터 opcode에 대한 정보(code, mnemonic, type) 등을
-*       읽어서 hash table에 저장한다. 각 정보는 공백으로 구분된다고 가정하고
-*       strtok를 이용하여 파일을 줄 단위로 읽어 파싱한다. 읽은 줄에 대해서
-*       파싱하는 도중에 예외가 발생하면 해당 줄은 건너뛰고 다음 줄을 읽는다.
-* 인자:
-* - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
-* 반환값: 없음
-*************************************************************************************/
-static void parseOpcode(Shell* shell)
-{
-	char buffer[LINE_MAX];
-	FILE* fp = fopen("./opcode.txt", "r");
-	if (fp == NULL) {
-		shell->error = ERR_INIT;
-		return;
-	}
-
-	while (!feof(fp)) {
-		char* ptr;
-		char* mne;
-		int* code_ptr;
-		int code;
-
-		fgets(buffer, LINE_MAX, fp);
-		buffer[strlen(buffer) - 1] = 0;
-
-		/* parse opcode */
-		ptr = strtok(buffer, " \t");
-		if (ptr == NULL)
-			continue;
-		code = (int)strtoul(ptr, NULL, 16);
-
-		/* parse mnemonic */
-		ptr = strtok(NULL, " \t");
-		if (ptr == NULL)
-			continue;
-
-		mne = strdup(ptr);
-		code_ptr = (int*)malloc(sizeof(int));
-		if (mne == NULL || code_ptr == NULL) {
-			shell->error = ERR_INIT;
-			return;
-		}
-
-		*code_ptr = code;
-		insertHash(&shell->op_table, mne, code_ptr);
 	}
 }
 
@@ -782,12 +727,12 @@ static void parseCommandLine(Shell* shell)
 	for (ptr2 = ptr; *ptr2 != 0 && *ptr2 != ','; ptr2++);
 	if (*ptr2 == 0) {
 		shell->argc = 1;
-		strcpy(shell->args[0], trim(ptr, ptr2 - 1));
+		strcpy(shell->args[0], strTrim(ptr, ptr2 - 1));
 		return;
 	}
 	else {
 		*ptr2 = 0;
-		strcpy(shell->args[0], trim(ptr, ptr2 - 1));
+		strcpy(shell->args[0], strTrim(ptr, ptr2 - 1));
 		ptr = ptr2 + 1;
 	}
 
@@ -795,12 +740,12 @@ static void parseCommandLine(Shell* shell)
 	for (ptr2 = ptr; *ptr2 != 0 && *ptr2 != ','; ptr2++);
 	if (*ptr2 == 0) {
 		shell->argc = 2;
-		strcpy(shell->args[1], trim(ptr, ptr2 - 1));
+		strcpy(shell->args[1], strTrim(ptr, ptr2 - 1));
 		return;
 	}
 	else {
 		*ptr2 = 0;
-		strcpy(shell->args[1], trim(ptr, ptr2 - 1));
+		strcpy(shell->args[1], strTrim(ptr, ptr2 - 1));
 		ptr = ptr2 + 1;
 	}
 
@@ -808,33 +753,13 @@ static void parseCommandLine(Shell* shell)
 	for (ptr2 = ptr; *ptr2 != 0 && *ptr2 != ','; ptr2++);
 	if (*ptr2 == 0) {
 		shell->argc = 3;
-		strcpy(shell->args[2], trim(ptr, ptr2 - 1));
+		strcpy(shell->args[2], strTrim(ptr, ptr2 - 1));
 	}
 	/* argument가 3개를 넘으면 에러 */
 	else {
 		shell->error = ERR_INVALID_USE;
 		return;
 	}
-}
-
-/*************************************************************************************
-* 설명: 한 문자열의 시작과 끝을 입력받아서 양 끝에 존재하는 공백을 모두 제거한다.
-*       중간에 있는 공백은 제거하지 않음.
-* 인자:
-* - start: 문자열의 시작을 가리키는 포인터
-* - end: 문자열의 끝을 가리키는 포인터
-* 반환값: trim이 적용된 문자열의 시작 포인터를 반환
-*************************************************************************************/
-static char* trim(char* start, char* end)
-{
-	char* ptr0;
-	char* ptr1;
-
-	for (ptr0 = start; isspace(*ptr0); ptr0++);
-	for (ptr1 = end; isspace(*ptr1); ptr1--)
-		*ptr1 = 0;
-
-	return ptr0;
 }
 
 /*************************************************************************************
@@ -878,40 +803,6 @@ static int getCommandCode(char* cmd)
 }
 
 /*************************************************************************************
-* 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
-*       기본으로 제공되는 hash function 이다.
-* 인자:
-* - key: key
-* 반환값: 해당 key를 이용하여 계산한 hash 값
-*************************************************************************************/
-static int hashFunc(void* key)
-{
-	char* str = (char*)key;
-	int i, sum;
-	int len = strlen(str);
-	for (i = 0, sum = 0; i< len; i++)
-		sum += str[i];
-
-	return sum % 20;
-}
-
-/*************************************************************************************
-* 설명: 임의의 key값을 넣으면 hash table의 entry 중에서 같은 key를 갖고 있는
-*       entry를 찾기 위한 비교 함수이다.
-* 인자:
-* - key0: entry의 key 혹은 사용자가 검색을 원하는 key. 같은지만 비교하므로 순서상관없음.
-* - key1: 사용자가 검색을 원하는 key 혹은 entry의 key. 같은지만 비교하므로 순서상관없음.
-* 반환값: 같으면 0, 다르면 그 이외의 값
-*************************************************************************************/
-static int hashCmp(void* key0, void* key1)
-{
-	char* str_a = (char*)key0;
-	char* str_b = (char*)key1;
-
-	return strcmp(str_a, str_b);
-}
-
-/*************************************************************************************
 * 설명: history는 list로 구성되어 있는데, 안에 담긴 data로 문자열을 할당하였으므로,
 *       할당한 메모리를 해제해 주어야 한다. list 의 모든 entry에 적용되는
 *       action function으로 data에 할당한 메모리를 해제하는 역할을 한다.
@@ -923,28 +814,6 @@ static int hashCmp(void* key0, void* key1)
 static void releaseHistory(void* data, void* aux)
 {
 	if (data != NULL) {
-		free(data);
-	}
-}
-
-/*************************************************************************************
-* 설명: opcodelist는 hash table로 구성되는데, 각 entry의 key로 문자열을 할당했으므로,
-*       할당한 메모리를 해제해 주어야 한다. hash table의 모든 entry에 적용되는
-*       action function으로 data에 할당한 메모리를 해제하는 역할을 한다.
-* 인자:
-* - data: list 각 item의 데이터
-* - aux: 추가적으로 필요하면 활용하기 위한 변수. auxiliary
-* 반환값: 없음
-*************************************************************************************/
-static void releaseOplist(void* data, void* aux)
-{
-	if (data != NULL) {
-		Entry* entry = (Entry*)data;
-		if (entry->key != NULL)
-			free(entry->key);
-		if (entry->value != NULL) {
-			free(entry->value);
-		}
 		free(data);
 	}
 }

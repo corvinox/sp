@@ -8,7 +8,7 @@
 * - list: list에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-void initializeList(List* list)
+void listInitialize(List* list)
 {
 	list->head = NULL;
 	list->tail = NULL;
@@ -22,7 +22,7 @@ void initializeList(List* list)
 * - data: data를 가리키는 포인터
 * 반환값: 없음
 *************************************************************************************/
-void addList(List* list, void* data)
+void listAdd(List* list, void* data)
 {
 	Node* new_node = (Node*)malloc(sizeof(Node));
 	new_node->data = data;
@@ -46,7 +46,7 @@ void addList(List* list, void* data)
 * - list: list에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-void clearList(List* list)
+void listClear(List* list)
 {
 	Node* ptr = list->head;
 	while (ptr != NULL) {
@@ -67,7 +67,7 @@ void clearList(List* list)
 * - action: data 이용하여 작업을 수행할 함수에 대한 함수포인터
 * 반환값: 없음
 *************************************************************************************/
-void foreachList(List* list, void* aux, void(*action)(void*, void*))
+void listForeach(List* list, void* aux, void(*action)(void*, void*))
 {
 	if (list->head == NULL)
 		return;

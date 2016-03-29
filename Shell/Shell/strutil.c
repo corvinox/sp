@@ -1,8 +1,9 @@
-﻿#include <stdio.h>
+﻿#include "strutil.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 
-char* strPartialDup(const char* start, const char* end)
+char* strPartialDup(char* start, char* end)
 {
 	int len = (int)(end - start);
 	char* dup = (char*)calloc(len + 1, sizeof(char));
@@ -33,14 +34,11 @@ char* strTrimFront(char* start)
 *************************************************************************************/
 char* strTrim(char* start, char* end)
 {
-	char* ptr0;
-	char* ptr1;
-
-	for (ptr0 = start; isspace(*ptr0); ptr0++);
-	for (ptr1 = end - 1; isspace(*ptr1); ptr1--)
-		*ptr1 = 0;
-
-	return ptr0;
+	char* ptr;
+	for (ptr = end; isspace(*ptr); ptr--)
+		*ptr = 0;
+	for (ptr = start; isspace(*ptr); ptr++);
+	return ptr;
 }
 
 /*************************************************************************************
@@ -96,7 +94,7 @@ char* strTrimCopy(char* start, char* end, char* dst)
 	return dst;
 }
 
-char* strTokenDup(const char* str, const char* delimeter, char** save)
+char* strTokenDup(char* str, char* delimeter, char** save)
 {
 	if (delimeter == NULL) {
 		return strdup(str);
@@ -112,7 +110,24 @@ char* strTokenDup(const char* str, const char* delimeter, char** save)
 	}
 }
 
-char* strParseDup(const char* str, char** save)
+void strParse(char* str, char** begin, char** end)
+{
+	if (str == NULL || *str == 0) {
+		*begin = NULL;
+		*end = NULL;
+		return;
+	}
+
+	*begin = strTrimFront(str);
+	for (*end = *begin; **end != ' ' && **end != '\t' && **end != '\n' && **end != 0; ++(*end)) {
+		if (**end == ',') {
+			++(*end);
+			break;
+		}
+	}
+}
+
+char* strParseDup(char* str, char** save)
 {
 	char* start;
 	if (str != NULL)
@@ -130,4 +145,24 @@ char* strParseDup(const char* str, char** save)
 		}
 	}
 	return strPartialDup(start, *save);
+}
+
+BOOL isHexadecimalStr(char* str)
+{
+	char* ptr = str;
+	for (; *ptr != 0; ptr++) {
+		if (!isxdigit(*ptr))
+			return false;
+	}
+	return true;
+}
+
+BOOL isDecimalStr(char* str)
+{
+	char* ptr = str;
+	for (; *ptr != 0; ptr++) {
+		if (!isdigit(*ptr))
+			return false;
+	}
+	return true;
 }

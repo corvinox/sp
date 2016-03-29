@@ -151,7 +151,6 @@
     <ClCompile Include="assembler.c" />
     <ClCompile Include="hash.c" />
     <ClCompile Include="list.c" />
-    <ClCompile Include="parser.c" />
     <ClCompile Include="shell.c" />
     <ClCompile Include="strutil.c" />
   </ItemGroup>
@@ -159,9 +158,9 @@
     <ClInclude Include="assembler.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="list.h" />
-    <ClInclude Include="parser.h" />
     <ClInclude Include="shell.h" />
     <ClInclude Include="strutil.h" />
+    <ClInclude Include="mytype.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="opcode.txt" />

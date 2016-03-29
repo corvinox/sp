@@ -9,11 +9,10 @@
 * - cmp: key값을 찾을 때, key 끼리 비교 하기 위한 비교 함수를 가리키는 함수포인터
 * 반환값: 없음
 *************************************************************************************/
-void initializeHash(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, void*))
+void hashInitialize(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, void*))
 {
-	int i;
-	for (i = 0; i < BUCKET_SIZE; i++)
-		initializeList(&hash->buckets[i]);
+	for (int i = 0; i < BUCKET_SIZE; i++)
+		listInitialize(&hash->buckets[i]);
 	hash->hash_func = hash_func;
 	hash->cmp = cmp;
 }
@@ -26,14 +25,14 @@ void initializeHash(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, vo
 * - value: hash table의 entry는 key-value 쌍으로 이루어진다. value
 * 반환값: 없음
 *************************************************************************************/
-void insertHash(HashTable* hash, void* key, void* value)
+void hashInsert(HashTable* hash, void* key, void* value)
 {
 	Entry* new_entry = (Entry*)malloc(sizeof(Entry));
 	new_entry->key = key;
 	new_entry->value = value;
 
 	int hash_key = hash->hash_func(key);
-	addList(&hash->buckets[hash_key], new_entry);
+	listAdd(&hash->buckets[hash_key], new_entry);
 }
 
 /*************************************************************************************
@@ -45,7 +44,7 @@ void insertHash(HashTable* hash, void* key, void* value)
 * - key: hash table에 저장된 entry 중에 같은 key를 찾기 위한 key
 * 반환값: 해당 key를 가진 entry의 value
 *************************************************************************************/
-void* getValue(HashTable* hash, void* key)
+void* hashGetValue(HashTable* hash, void* key)
 {
 	int hash_key = hash->hash_func(key);
 	List* list = &hash->buckets[hash_key];
@@ -68,11 +67,11 @@ void* getValue(HashTable* hash, void* key)
 * - hash: hash table에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
-void clearHash(HashTable* hash)
+void hashClear(HashTable* hash)
 {
 	int i;
 	for (i = 0; i < BUCKET_SIZE; i++) {
-		clearList(&hash->buckets[i]);
+		listClear(&hash->buckets[i]);
 	}
 }
 
@@ -83,11 +82,11 @@ void clearHash(HashTable* hash)
 * - action: entry 이용하여 작업을 수행할 함수를 가리키는 함수포인터
 * 반환값: 없음
 *************************************************************************************/
-void foreachHash(HashTable* hash, void* aux, void(*action)(void*, void*))
+void hashForeach(HashTable* hash, void* aux, void(*action)(void*, void*))
 {
 	int i;
 	for (i = 0; i < BUCKET_SIZE; i++) {
-		foreachList(&hash->buckets[i], aux, action);
+		listForeach(&hash->buckets[i], aux, action);
 	}
 }
 

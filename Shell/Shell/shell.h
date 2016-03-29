@@ -1,17 +1,10 @@
 ﻿#ifndef SHELL_H_
 #define SHELL_H_
 
+#include "mytype.h"
 #include "list.h"
 #include "hash.h"
 #include "assembler.h"
-
-#ifndef true
-#define true 1
-#endif
-#ifndef false
-#define false 0
-#endif
-
 
 #define OP_LEN_MAX 16;
 
@@ -23,7 +16,7 @@
 #define ARG_LEN_MAX 80
 #define ARG_CNT_MAX 3
 
-typedef enum Error
+typedef enum
 { 
 	ERR_NONE, 
 	ERR_INIT, 
@@ -31,10 +24,10 @@ typedef enum Error
 	ERR_INVALID_USE, 
 	ERR_RUN_FAIL, 
 	ERR_EMPTY 
-} Error;
+} ShellError;
 
 #define CMD_CNT 13
-typedef enum Command
+typedef enum
 { 
 	CMD_INVALID = -1, 
 	CMD_HELP, 
@@ -50,7 +43,7 @@ typedef enum Command
 	CMD_ASSEMBLE,
 	CMD_TYPE,
 	CMD_SYMBOL
-} Command;
+} ShellCmd;
 
 
 /*************************************************************************************
@@ -69,11 +62,12 @@ typedef enum Command
 * op_table: opcode의 code, mnemonic, type에 대한 정보를 저장할 hash table
 *************************************************************************************/
 typedef struct Shell_ {
-	Error error;
-	Command cmd_code;
+	ShellError error;
+	ShellCmd cmd_code;
 	int argc;
-	int quit;
-	int init;
+	
+	BOOL quit;
+	BOOL init;
 	unsigned int mem_addr;
 
 	char* vm;
@@ -86,8 +80,8 @@ typedef struct Shell_ {
 } Shell;
 
 /* Shell 관련 함수 */
-extern void initializeShell(Shell* shell);
-extern void startShell(Shell* shell);
-extern void releaseShell(Shell* shell);
+extern void shellInitialize(Shell* shell);
+extern void shellStart(Shell* shell);
+extern void shellRelease(Shell* shell);
 
 #endif
