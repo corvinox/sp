@@ -9,6 +9,7 @@
 typedef enum
 {
 	ERR_NO = 0,
+	ERR_NO_INIT,
 	ERR_DUPLICATE_SYMBOL,
 	ERR_UNDEFINED_SYMBOL,
 	ERR_INVALID_OPCODE,
@@ -76,5 +77,6 @@ typedef struct
 extern void assemblerInitialize(Assembler* asmblr);
 extern void assemblerAssemble(Assembler* asmblr, const char* filename);
 extern void assemblerRelease(Assembler* asmblr);
+extern BOOL assemblerIsInitialized(Assembler* asmblr);
 
 #endif

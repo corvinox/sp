@@ -28,7 +28,7 @@ static void textRecordWrite(int start, char* code, FILE* stream);
 static void modificationRecordWrite(int start, int halfs, FILE* stream);
 static void endRecordWrite(int excutable, FILE* stream);
 
-void assemblerInitialize(Assembler* asmblr)
+BOOL assemblerInitialize(Assembler* asmblr)
 {
 	int idx = 0;
 	asmblr->reg_table[idx].mnemonic = "A";
@@ -53,6 +53,8 @@ void assemblerInitialize(Assembler* asmblr)
 	hashInitialize(&asmblr->op_table, hashFunc, hashCmp);
 	hashInitialize(&asmblr->sym_table, hashFunc, hashCmp);
 	opcodeLoad(asmblr);
+
+	return true;
 }
 
 void assemblerAssemble(Assembler* asmblr, const char* filename)
@@ -118,7 +120,7 @@ static void opcodeLoad(Assembler* asmblr)
 	char buffer[BUFFER_MAX];
 	FILE* fp = fopen("./opcode.txt", "r");
 	if (fp == NULL) {
-		//
+		asmblr->error = ERR_NO_INIT;
 		return;
 	}
 
@@ -139,13 +141,16 @@ static void opcodeLoad(Assembler* asmblr)
 
 		char* mne = strdup(ptr);
 		int* code_ptr = (int*)malloc(sizeof(int));
-		if (mne == NULL || code_ptr == NULL) {
-			//
-			return;
+		if (mne != NULL && code_ptr != NULL) {
+			*code_ptr = code;
+			hashInsert(&asmblr->op_table, mne, code_ptr);
 		}
-
-		*code_ptr = code;
-		hashInsert(&asmblr->op_table, mne, code_ptr);
+		else {
+			if (mne != NULL)
+				free(mne);
+			if (code_ptr != NULL)
+				free(code_ptr);
+		}
 	}
 }
 
