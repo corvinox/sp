@@ -13,7 +13,7 @@
 typedef struct {
 	void* key;
 	void* value;
-} Entry;
+} HashEntry;
 
 /*************************************************************************************
 * 설명: key-value entry를 data로 갖는 linked-list들의 배열로 구성된 hash table.

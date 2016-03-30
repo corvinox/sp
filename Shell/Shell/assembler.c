@@ -199,7 +199,7 @@ static void opcodeLoad(Assembler* asmblr)
 static void tableRelease(void* data, void* aux)
 {
 	if (data != NULL) {
-		Entry* entry = (Entry*)data;
+		HashEntry* entry = (HashEntry*)data;
 		if (entry->key != NULL)
 			free(entry->key);
 		if (entry->value != NULL) {

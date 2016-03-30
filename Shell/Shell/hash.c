@@ -27,7 +27,7 @@ void hashInitialize(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, vo
 *************************************************************************************/
 void hashInsert(HashTable* hash, void* key, void* value)
 {
-	Entry* new_entry = (Entry*)malloc(sizeof(Entry));
+	HashEntry* new_entry = (HashEntry*)malloc(sizeof(HashEntry));
 	new_entry->key = key;
 	new_entry->value = value;
 
@@ -51,7 +51,7 @@ void* hashGetValue(HashTable* hash, void* key)
 
 	Node* ptr = list->head;
 	while (ptr != NULL) {
-		Entry* entry = (Entry*)ptr->data;
+		HashEntry* entry = (HashEntry*)ptr->data;
 		if (entry != NULL && !hash->cmp(entry->key, key)) {
 			return entry->value;
 		}

@@ -511,12 +511,12 @@ static void runCmdOplist(Shell* shell)
 
 		ptr = shell->op_table.buckets[i].head;
 		if (ptr != NULL) {
-			Entry* entry = (Entry*)ptr->data;
+			HashEntry* entry = (HashEntry*)ptr->data;
 			printf("[%s, %02X]", (char*)entry->key, *(int*)entry->value);
 			ptr = ptr->next;
 
 			while (ptr != NULL) {
-				Entry* entry = (Entry*)ptr->data;
+				HashEntry* entry = (HashEntry*)ptr->data;
 				printf(" → [%s, %02X]", (char*)entry->key, *(int*)entry->value);
 				ptr = ptr->next;
 			}
