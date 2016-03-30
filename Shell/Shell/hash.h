@@ -25,6 +25,7 @@ typedef struct {
 *************************************************************************************/
 typedef struct {
 	List buckets[BUCKET_SIZE];
+	int size;
 	int(*hash_func)(void*);
 	int(*cmp)(void*, void*);
 } HashTable;

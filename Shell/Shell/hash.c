@@ -15,6 +15,7 @@ void hashInitialize(HashTable* hash, int(*hash_func)(void*), int(*cmp)(void*, vo
 		listInitialize(&hash->buckets[i]);
 	hash->hash_func = hash_func;
 	hash->cmp = cmp;
+	hash->size = 0;
 }
 
 /*************************************************************************************
@@ -33,6 +34,8 @@ void hashInsert(HashTable* hash, void* key, void* value)
 
 	int hash_key = hash->hash_func(key);
 	listAdd(&hash->buckets[hash_key], new_entry);
+
+	hash->size++;
 }
 
 /*************************************************************************************
@@ -48,14 +51,12 @@ void* hashGetValue(HashTable* hash, void* key)
 {
 	int hash_key = hash->hash_func(key);
 	List* list = &hash->buckets[hash_key];
-
-	Node* ptr = list->head;
-	while (ptr != NULL) {
+		
+	for (Node* ptr = list->head; ptr != NULL;  ptr = ptr->next) {
 		HashEntry* entry = (HashEntry*)ptr->data;
 		if (entry != NULL && !hash->cmp(entry->key, key)) {
 			return entry->value;
 		}
-		ptr = ptr->next;
 	}
 	
 	return NULL;
@@ -69,10 +70,9 @@ void* hashGetValue(HashTable* hash, void* key)
 *************************************************************************************/
 void hashClear(HashTable* hash)
 {
-	int i;
-	for (i = 0; i < BUCKET_SIZE; i++) {
+	for (int i = 0; i < BUCKET_SIZE; i++)
 		listClear(&hash->buckets[i]);
-	}
+	hash->size = 0;
 }
 
 /*************************************************************************************
@@ -84,9 +84,7 @@ void hashClear(HashTable* hash)
 *************************************************************************************/
 void hashForeach(HashTable* hash, void* aux, void(*action)(void*, void*))
 {
-	int i;
-	for (i = 0; i < BUCKET_SIZE; i++) {
+	for (int i = 0; i < BUCKET_SIZE; i++)
 		listForeach(&hash->buckets[i], aux, action);
-	}
 }
 
