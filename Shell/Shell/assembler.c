@@ -3,16 +3,27 @@
 #include <stdlib.h>
 #include "strutil.h"
 
-#define BUFFER_MAX 1024
+/* buffer에 관련된 값 정의 */
+#define BUFFER_LEN 1024
+#define BUFFER_SIZE_XXS 8
+#define BUFFER_SIZE_XS  16
+#define BUFFER_SIZE_S   64
+#define BUFFER_SIZE_M   128
+#define BUFFER_SIZE_L   256
+#define BUFFER_SIZE_XL  1024
 
-#define OBJ_MAX_LEN 30
+#define OBJ_MAX_LEN 60
 
+/* Listing file formatting에 필요한 값을 정의 */
 #define LST_LINE_NUMBER_LEN 5
 #define LST_LABEL_LEN       6
 #define LST_INSTRUCTION_LEN 6
 #define LST_OPERAND_LEN     (OBJ_MAX_LEN + 3)
 
 #define TEXT_OBJ_LEN 60
+
+#define MASK_12BITS 0x00000111
+#define MASK_24BITS 0x00111111
 
 static int hashFunc(void* key);
 static int hashCmp(void* a, void* b);
@@ -21,7 +32,10 @@ static void tableRelease(void* data, void* aux);
 static void preload(Assembler* asmblr);
 static void pass1(Assembler* asmblr, const char* filename);
 static void pass2(Assembler* asmblr, const char* filename);
-static void parseStatement(Statement* stmt, char* buffer, int maxCount, FILE* stream);
+static void parseStatement(Assembler* asmblr, Statement* stmt, FILE* stream);
+static int getInstructionCode(Assembler* asmblr, char* str);
+static void intfileHeaderWrite(Statement* stmt, FILE* stream);
+static void intfileWrite(Statement* stmt, FILE* stream);
 static void lstfileWrite(Statement* stmt, FILE* stream);
 static void headerRecordWrite(char* name, int start, int length, FILE* stream);
 static void textRecordWrite(int start, char* code, FILE* stream);
@@ -59,11 +73,29 @@ BOOL assemblerInitialize(Assembler* asmblr)
 
 void assemblerAssemble(Assembler* asmblr, const char* filename)
 {
+	FILE* fp = fopen(filename, "r");
+	Statement stmt;
+	while(!feof(fp)) {
+		parseStatement(asmblr, &stmt, fp);
+		if (stmt.is_invalid) {
+
+		}
+		else if (stmt.is_comment) {
+			printf("comment\n");
+		}
+		else {
+			printf("label: [%s], inst: [%s], operand: [%s]\n", stmt.label, stmt.instruction, stmt.operand);
+		}
+	}
+	fclose(fp);
+	return;
+
+
 	char buffer[256];
 	sscanf(filename, "%[^.]", buffer);
 
 	pass1(asmblr, buffer);
-	pass2(asmblr, buffer);
+	//pass2(asmblr, buffer);
 }
 
 void assemblerRelease(Assembler* asmblr)
@@ -84,7 +116,7 @@ static int hashFunc(void* key)
 	char* str = (char*)key;
 	int sum = 0;
 	int len = strlen(str);
-	for (int i = 0; i< len; i++)
+	for (int i = 0; i < len; i++)
 		sum += str[i];
 
 	return sum % 20;
@@ -117,7 +149,7 @@ static int hashCmp(void* key0, void* key1)
 *************************************************************************************/
 static void opcodeLoad(Assembler* asmblr)
 {
-	char buffer[BUFFER_MAX];
+	char buffer[BUFFER_LEN];
 	FILE* fp = fopen("./opcode.txt", "r");
 	if (fp == NULL) {
 		asmblr->error = ERR_NO_INIT;
@@ -125,7 +157,7 @@ static void opcodeLoad(Assembler* asmblr)
 	}
 
 	while (!feof(fp)) {
-		fgets(buffer, BUFFER_MAX, fp);
+		fgets(buffer, BUFFER_LEN, fp);
 		buffer[strlen(buffer) - 1] = 0;
 
 		/* parse opcode */
@@ -203,13 +235,11 @@ static void preload(Assembler* asmblr)
 	for (int i = 0; i < REG_CNT; i++) {
 		//hashInsert(&asmblr->sym_table, asmblr->reg_table[i].mnemonic, )
 	}
-	
-	
 }
 
 static void pass1(Assembler* asmblr, const char* filename)
 {
-	char buffer[BUFFER_MAX];
+	char buffer[BUFFER_LEN];
 	Statement stmt;
 
 	sprintf(buffer, "%s.asm", filename);
@@ -225,16 +255,19 @@ static void pass1(Assembler* asmblr, const char* filename)
 		return;
 	}
 
-	parseStatement(&stmt, buffer, BUFFER_MAX, fp_asm);
-	if (!strcmp(stmt.instruction, "START")){
+	stmt.line_number = 0;
+
+	//parseStatement(&stmt, buffer, BUFFER_LEN, fp_asm);
+	if (!strcmp(stmt.instruction, "START")) {
 		if (!isHexadecimalStr(stmt.operand)) {
 			// error
+			printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
 		}
 		// save #[OPERAND] as starting address
 		asmblr->start_addr = strtol(stmt.operand, NULL, 16);
-		
+
 		// write line to intermediate file
-		parseStatement(&stmt, buffer, BUFFER_MAX, fp_asm);
+		//parseStatement(&stmt, buffer, BUFFER_LEN, fp_asm);
 	}
 	else {
 		asmblr->start_addr = 0;
@@ -247,7 +280,9 @@ static void pass1(Assembler* asmblr, const char* filename)
 				// search SYMTAB for LABEL
 				void* label = hashGetValue(&asmblr->sym_table, stmt.label);
 				if (label != NULL) {
+					// error
 					asmblr->error = ERR_DUPLICATE_SYMBOL;
+					printf("        line %d: 이미 존재하는 SYMBOL (%s)\n", stmt.line_number, (stmt.label == NULL ? "" : stmt.label));
 				}
 				else {
 					char* key = strdup(stmt.label);
@@ -263,7 +298,7 @@ static void pass1(Assembler* asmblr, const char* filename)
 			if (value != NULL) {
 				asmblr->locctr += (stmt.is_extended ? 4 : 3);
 			}
-			else if(!strcmp(stmt.instruction, "WORD")) {
+			else if (!strcmp(stmt.instruction, "WORD")) {
 				asmblr->locctr += 3;
 			}
 			else if (!strcmp(stmt.instruction, "RESW")) {
@@ -273,6 +308,7 @@ static void pass1(Assembler* asmblr, const char* filename)
 				}
 				else {
 					// error
+					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
 				}
 			}
 			else if (!strcmp(stmt.instruction, "RESB")) {
@@ -282,28 +318,31 @@ static void pass1(Assembler* asmblr, const char* filename)
 				}
 				else {
 					// error
+					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
 				}
 			}
 			else if (!strcmp(stmt.instruction, "BYTE")) {
-				int len = strlen(stmt.instruction);
+				int len = strlen(stmt.operand);
 
-				if (stmt.instruction[0] == '\'' && stmt.instruction[len - 1] == '\'') {
-					if (stmt.instruction[0] == 'C')
+				if (stmt.operand[0] == '\'' && stmt.operand[len - 1] == '\'') {
+					if (stmt.operand[0] == 'C')
 						asmblr->locctr += len - 3;
-					else if (stmt.instruction[0] == 'X')
+					else if (stmt.operand[0] == 'X')
 						asmblr->locctr += (len - 2) / 2;
 					else {
 						// error
+						printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
 					}
 				}
 				else {
 					// error
+					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
 				}
 			}
 		}
 
 		// write int
-		parseStatement(&stmt, buffer, BUFFER_MAX, fp_asm);
+		//parseStatement(&stmt, buffer, BUFFER_LEN, fp_asm);
 	}
 	// write int
 	asmblr->prog_len = asmblr->locctr - asmblr->start_addr;
@@ -314,9 +353,11 @@ static void pass1(Assembler* asmblr, const char* filename)
 
 static void pass2(Assembler* asmblr, const char* filename)
 {
-	char buffer[BUFFER_MAX];
+	char prog_name[7];
+	char buffer[BUFFER_LEN];
 	char text_obj[TEXT_OBJ_LEN + 1] = { 0, };
 	Statement stmt;
+	int base_value = 0;
 
 	sprintf(buffer, "%s.int", filename);
 	FILE* fp_int = fopen(buffer, "r");
@@ -336,40 +377,110 @@ static void pass2(Assembler* asmblr, const char* filename)
 		return;
 	}
 
-	parseStatement(&stmt, buffer, BUFFER_MAX, fp_int);
+	//parseStatement(&stmt, buffer, BUFFER_LEN, fp_int);
 	if (!strcmp(stmt.instruction, "START")) {
 		lstfileWrite(&stmt, fp_lst);
-		parseStatement(&stmt, buffer, BUFFER_MAX, fp_int);
+		//parseStatement(&stmt, buffer, BUFFER_LEN, fp_int);
 	}
 
 	// write header record
-	headerRecordWrite("", 0, 0, fp_obj);
+	headerRecordWrite(prog_name, 0, 0, fp_obj);
 	// init first text record
 	while (strcmp(stmt.instruction, "END")) {
 		if (!stmt.is_comment) {
 			char obj_code[OBJ_MAX_LEN] = { 0, };
-
+			int operand = 0;
 			void* opcode = hashGetValue(&asmblr->op_table, stmt.instruction);
+
 			if (opcode != NULL) {
 				if (stmt.has_operand) {
-					void* operand = hashGetValue(&asmblr->sym_table, stmt.operand);
-					if (operand != NULL) {
+					void* sym_value = hashGetValue(&asmblr->sym_table, stmt.operand);
+					if (sym_value != NULL) {
 						// store symbol value as operand address
+						operand = *(int*)sym_value;
 					}
 					else {
 						// store 0 as operand address
+						operand = 0;
 						// set error flag (undefined symbol)
+						asmblr->error = ERR_UNDEFINED_SYMBOL;
+					}
+				}
+
+				/* TA addressing mode 설정*/
+				int pc = stmt.loc + (stmt.is_extended ? 4 : 3);
+				int ni;
+				int x = (stmt.is_indexed ? 1 : 0);
+				int b = 0;
+				int p = 0;
+				int e = 0;
+				/* how to interpret */
+				if (stmt.addr_mode == ADDR_SIMPLE)
+					ni = 0x11;
+				else if (stmt.addr_mode == ADDR_INDIRECT)
+					ni = 0x10;
+				else if (stmt.addr_mode == ADDR_IMMEDIATE)
+					ni = 0x01;
+
+				/* how to caculate */
+				int disp = operand - pc;
+				if (disp >= -2048 && disp <= 2047) {
+					/* PC relative로 계산 */
+					/* 음수인 경우 12BIT만 사용하기 위해서 MASKING */
+					p = 1;
+					disp &= MASK_12BITS;
+				}
+				else {
+					/* PC relative로 불가능하면 Base relative로 계산 */
+					disp = operand - base_value;
+
+					if (disp >= 0 && disp <= 4095) {
+						b = 1;
+					}
+					else {
+						/* Base relatvie로 불가능하면 format 4 사용 */
+						e = 1;
+						disp = operand;
+					}
+				}
+
+				// assemble the object code instruction
+				sprintf(obj_code, "%8X%X%X%X%X%*X", *(int*)opcode + ni, x, b, p, e, (e ? 15 : 12), disp);
+			}
+			else if (!strcmp(stmt.instruction, "BYTE")) {
+				int len = strlen(stmt.operand);
+
+				if (stmt.instruction[0] == '\'' && stmt.operand[len - 1] == '\'') {
+					if (stmt.operand[0] == 'C')
+						asmblr->locctr += len - 3;
+					else if (stmt.operand[0] == 'X') {
+						if (len & 1) {
+							char* endPtr;
+							int value = strtol(stmt.operand + 2, &endPtr, 16);
+							//if (endPtr - stmt.operand == len - 1)
+						}
+						else {
+							// error
+						}
+					}
+					else {
+						// error
 					}
 				}
 				else {
-					// store 0 as operand address
+					// error
 				}
-				// assemble  the object code instruction
-			}
-			else if (!strcmp(stmt.instruction, "BYTE")) {
 			}
 			else if (!strcmp(stmt.instruction, "WORD")) {
-				// convert constant to object code				
+				// convert constant to object code	
+				char* endPtr;
+				int value = strtol(stmt.operand, &endPtr, 10);
+				if (endPtr - stmt.operand == strlen(stmt.operand)) {
+					sprintf(obj_code, "%*X", 6, MASK_24BITS & value);
+				}
+				else {
+					// error
+				}
 			}
 
 			/* object code will not fit into the current Text record */
@@ -383,7 +494,7 @@ static void pass2(Assembler* asmblr, const char* filename)
 		}
 		// write lst line
 		lstfileWrite(&stmt, fp_lst);
-		parseStatement(&stmt, buffer, BUFFER_MAX, fp_int);
+		//parseStatement(&stmt, buffer, BUFFER_LEN, fp_int);
 	}
 
 	// write last Text record to object program
@@ -398,86 +509,148 @@ static void pass2(Assembler* asmblr, const char* filename)
 	fclose(fp_obj);
 }
 
-static void parseStatement(Statement* stmt, char* buffer, int maxCount, FILE* stream) {
-	char* str;
-	char* ptr;
-	char* savePtr;
+static void parseStatement(Assembler* asmblr, Statement* stmt, FILE* stream) 
+{
+	char* begin;
+	char* end;
+	char buffer[BUFFER_LEN];
+	char buffer2[BUFFER_LEN];
 
-	if (buffer == NULL) {
-		return;
-	}
-	
-	fgets(buffer, maxCount, stream);
-
-	// str = strTrimDup(buffer, buffer + strlen(buffer));
-	str = strTrim(buffer, buffer + strlen(buffer));
-	if (str == NULL) {
+	if (fgets(buffer, BUFFER_LEN, stream) == NULL) {
+		/* 파일의 끝이면 현재 statement가 invalid 한 것으로 설정 */
+		stmt->is_invalid = true;
 		return;
 	}
 
-	/* comment인지 검사 */
-	if (str[0] == '.') {
+	/* 앞,뒤 공백을 제거 */
+	begin = strTrim(buffer, buffer + strlen(buffer));
+
+	if (strlen(begin) == 0) {
+		/* 빈 문자열인 경우 invalid한 statement */
+		stmt->is_invalid = true;
+	}
+	else if (begin[0] == '.') {
+		/* comment인 경우 */
 		stmt->is_comment = true;
-		stmt->comment = str;
-		return;
 	}
+	else {		
+		/* 위의 경우가 모두 아닌 경우 comment도 아니고 valid 하다고 판단 */
+		stmt->is_comment = false;
+		stmt->is_invalid = false;
 
+		stmt->line_number += 5;
 
-	//char* begin;
-	//char* end;
-	//strParse(str, &begin, &end);
+		strParse(begin, &begin, &end);
+		strncpy(buffer2, begin, end - begin);
+		buffer2[end - begin] = 0;
 
-	//char* begin;
-	//char* end;
-	//strParse(str, &begin, &end);
+		/* 파싱한 첫 문자열이 instruction이 아니면 label로 인식 */
+		int inst_code = getInstructionCode(asmblr, buffer2);
+		if (inst_code == INST_NO) {
+			/* label 설정 */
+			stmt->has_label = true;
+			strcpy(stmt->label, buffer2);
 
-	//char* begin;
-	//char* end;
-	//strParse(str, &begin, &end);
-	//if (begin == NULL) {
+			strParse(end, &begin, &end);
+			strncpy(buffer2, begin, end - begin);
+			buffer2[end - begin] = 0;
+			/* label 뒤에 파싱한 문자열이 instruction이 아니면 에러 */
+			inst_code = getInstructionCode(asmblr, buffer2);
+			if (inst_code == INST_NO) {
+				/* error: instruction 없음 */
+			}
+			else if (strlen(buffer2) > INSTRUCTION_LEN) {
+				/* error: 너무 긴 instruction */
+			} else {
+				/* instruction 설정 */
+				stmt->inst_code = inst_code;
+				strcpy(stmt->instruction, buffer2);
+			}
+		}
+		else if (strlen(buffer2) > INSTRUCTION_LEN) {
+			/* error: 너무 긴 instruction */
+		}
+		else {
+			/* label 없음 설정*/
+			stmt->has_label = false;
+			stmt->label[0] = 0;
 
-	//}
-
-
-	char* dst = str;
-	char* src = str;
-	while (*src != 0) {
-		if (*src == ' ' || *src == '\t' || *str == ',') {
-			for (; *src == ' ' || *src == '\t' || *str == ','; src++)
-				if (*src == ',')
-			*(dst++) = ' ';
+			/* instruction 설정 */
+			stmt->inst_code = inst_code;
+			strcpy(stmt->instruction, buffer2);
 		}
 
+		/* operand 설정 */
+		begin = strTrimFront(end);
+		int operand_len = strlen(begin);
+		if (operand_len > OPERAND_LEN) {
+			/* error: 너무 긴 operand */
+		}
+		else if (operand_len <= 0) {
+			/* operand 없음 설정 */
+			stmt->has_operand = false;
+			stmt->operand[0] = 0;
+		}
+		else {
+			/* operand 설정 */
+			stmt->has_operand = true;
+			strcpy(stmt->operand, begin);
+		}
 	}
-	*dst = *src;
+}
 
-	/*  */
-	ptr = strParseDup(str, &savePtr);
-	if (ptr == NULL) {
-		return;
+static int getInstructionCode(Assembler* asmblr, char* str)
+{
+	if (!strcmp(str, "START")) {
+		return INST_START;
+	}
+	else if (!strcmp(str, "END")) {
+		return INST_END;
+	}
+	else if (!strcmp(str, "BYTE")) {
+		return INST_BYTE;
+	}
+	else if (!strcmp(str, "WORD")) {
+		return INST_WORD;
+	}
+	else if (!strcmp(str, "RESB")) {
+		return INST_RESB;
+	}
+	else if (!strcmp(str, "RESW")) {
+		return INST_RESW;
+	}
+	else if (!strcmp(str, "BASE")) {
+		return INST_BASE;
+	}
+	else {
+		void* value = NULL;
+		if (str[0] == '+')
+			value = hashGetValue(&asmblr->op_table, str + 1);
+		else
+			value = hashGetValue(&asmblr->op_table, str);
+
+		if (value != NULL) {
+			return INST_OPCODE;
+		}
 	}
 
-	ptr = strParseDup(NULL, &savePtr);
-	if (ptr == NULL) {
-		return;
-	}
+	return INST_NO;
+}
 
-	ptr = strParseDup(NULL, &savePtr);
-	if (ptr == NULL) {
-		return;
-	}
+static void intfileHeaderWrite(Statement* stmt, FILE* stream)
+{
+	fprintf(stream, "%d", stmt->line_number);
+}
 
-	free(str);
+static void intfileWrite(Statement* stmt, FILE* stream)
+{
+	fprintf(stream, "%d", stmt->line_number);
 }
 
 static void lstfileWrite(Statement* stmt, FILE* stream)
 {
-	fprintf(stream, "%*d    ", LST_LINE_NUMBER_LEN, stmt->line_number);
-	
-	if (stmt->is_comment) {
-		fprintf(stream, "%s\n", stmt->comment);
-	}
-	else {
+	if (!stmt->is_comment) {
+		fprintf(stream, "%*d    ", LST_LINE_NUMBER_LEN, stmt->line_number);
 		fprintf(stream, "%5d    ", stmt->loc);
 		fprintf(stream, "%-*s   ", LST_LABEL_LEN, (stmt->has_label ? stmt->label : ""));
 		fprintf(stream, "%c", stmt->is_extended ? '+' : ' ');

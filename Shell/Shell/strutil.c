@@ -26,7 +26,7 @@ char* strTrimFront(char* start)
 
 /*************************************************************************************
 * 설명: 한 문자열의 시작과 끝을 입력받아서 양 끝에 존재하는 공백을 모두 제거한다.
-*       중간에 있는 공백은 제거하지 않음.
+*       중간에 있는 공백은 제거하지 않음. 범위는 [start, end)
 * 인자:
 * - start: 문자열의 시작을 가리키는 포인터
 * - end: 문자열의 끝을 가리키는 포인터
@@ -34,8 +34,11 @@ char* strTrimFront(char* start)
 *************************************************************************************/
 char* strTrim(char* start, char* end)
 {
+	if (start >= end)
+		return;
+
 	char* ptr;
-	for (ptr = end; isspace(*ptr); ptr--)
+	for (ptr = end - 1; isspace(*ptr) && start < ptr; ptr--)
 		*ptr = 0;
 	for (ptr = start; isspace(*ptr); ptr++);
 	return ptr;

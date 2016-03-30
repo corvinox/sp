@@ -7,6 +7,7 @@
 #define strdup _strdup
 
 extern char* strPartialDup(char* start, char* end);
+extern char* strTrimFront(char* start);
 extern char* strTrim(char* start, char* end);
 extern char* strTrimDup(char* start, char* end);
 extern char* strTrimCopy(char* start, char* end, char* dst);

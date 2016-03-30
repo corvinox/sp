@@ -6,6 +6,11 @@
 
 #define REG_CNT 9
 
+#define COMMENT_LEN     1024
+#define LABEL_LEN       8
+#define INSTRUCTION_LEN 8
+#define OPERAND_LEN     128
+
 typedef enum
 {
 	ERR_NO = 0,
@@ -17,12 +22,14 @@ typedef enum
 
 typedef enum
 {
+	INST_NO = -1,
 	INST_START = 0,
 	INST_END,
 	INST_BYTE,
 	INST_WORD,
 	INST_RESB,
 	INST_RESW,
+	INST_BASE,
 	INST_OPCODE
 } AsmInst;
 
@@ -38,15 +45,18 @@ typedef struct
 	int line_number;
 	int loc;
 	int error;
+	int inst_code;
 	int addr_mode;
-	char* label;
-	char* instruction;
-	char* operand;
-	char* comment;
+	BOOL is_invalid;
 	BOOL is_extended;
+	BOOL is_indexed;
 	BOOL is_comment;
 	BOOL has_label;
 	BOOL has_operand;
+
+	char label[LABEL_LEN];
+	char instruction[INSTRUCTION_LEN];
+	char operand[OPERAND_LEN];
 } Statement;
 
 typedef struct
@@ -74,7 +84,7 @@ typedef struct
 	Register reg_table[REG_CNT];
 } Assembler;
 
-extern void assemblerInitialize(Assembler* asmblr);
+extern BOOL assemblerInitialize(Assembler* asmblr);
 extern void assemblerAssemble(Assembler* asmblr, const char* filename);
 extern void assemblerRelease(Assembler* asmblr);
 extern BOOL assemblerIsInitialized(Assembler* asmblr);
