@@ -1,29 +1,28 @@
 ﻿#ifndef ASSEBLER_H_
 #define ASSEBLER_H_
 
+#include <stdio.h>
 #include "mytype.h"
 #include "hash.h"
-
-#define REG_CNT 9
 
 #define COMMENT_LEN     1024
 #define LABEL_LEN       8
 #define INSTRUCTION_LEN 8
 #define OPERAND_LEN     128
 
-typedef enum
+typedef enum _AsmErrorCode
 {
-	ERR_NO = 0,
+	ERR_NO,
 	ERR_NO_INIT,
 	ERR_DUPLICATE_SYMBOL,
 	ERR_UNDEFINED_SYMBOL,
 	ERR_INVALID_OPCODE,
-} AsmError;
+} AsmErrorCode;
 
-typedef enum
+typedef enum _AsmInstCode
 {
-	INST_NO = -1,
-	INST_START = 0,
+	INST_NO,
+	INST_START,
 	INST_END,
 	INST_BYTE,
 	INST_WORD,
@@ -31,22 +30,22 @@ typedef enum
 	INST_RESW,
 	INST_BASE,
 	INST_OPCODE
-} AsmInst;
+} AsmInstCode;
 
-typedef enum
+typedef enum _AddrMode
 {
 	ADDR_SIMPLE = 0,
 	ADDR_IMMEDIATE,
 	ADDR_INDIRECT
 } AddrMode;
 
-typedef struct
+typedef struct _Statement
 {
 	int line_number;
 	int loc;
-	int error;
 	int inst_code;
 	int addr_mode;
+	int error;
 	BOOL is_invalid;
 	BOOL is_extended;
 	BOOL is_indexed;
@@ -59,7 +58,7 @@ typedef struct
 	char operand[OPERAND_LEN];
 } Statement;
 
-typedef struct
+typedef struct _IntStatement
 {
 	int line_number;
 	int loc;
@@ -67,26 +66,37 @@ typedef struct
 	int addr_mode;
 } IntStatement;
 
-typedef struct
+typedef struct _Register
 {
 	char* mnemonic;
 	int number;
-} Register;
+} AsmRegister;
 
-typedef struct
+typedef struct _Assembler
 {
 	int error;
 	int prog_len;
 	int start_addr;
 	int locctr;
+	HashTable dir_table;
 	HashTable op_table;
+	HashTable reg_table;
 	HashTable sym_table;
-	Register reg_table[REG_CNT];
 } Assembler;
 
+typedef struct
+{
+	char* mnemonic;
+	int inst_code;
+	void* aux;
+	void(*exec_func)(Assembler*, Statement*, FILE*, void* aux);
+} AsmInstruction;
+
 extern BOOL assemblerInitialize(Assembler* asmblr);
-extern void assemblerAssemble(Assembler* asmblr, const char* filename);
 extern void assemblerRelease(Assembler* asmblr);
-extern BOOL assemblerIsInitialized(Assembler* asmblr);
+extern void assemblerAssemble(Assembler* asmblr, const char* filename);
+extern void assemblerPrintOpcode(Assembler* asmblr, char* opcode, FILE* stream);
+extern void assemblerPrintOpcodeTable(Assembler* asmblr, FILE* stream);
+extern void assemblerPrintSymbolTable(Assembler* asmblr, FILE* stream);
 
 #endif

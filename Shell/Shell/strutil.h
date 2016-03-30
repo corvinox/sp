@@ -6,14 +6,11 @@
 
 #define strdup _strdup
 
-extern char* strPartialDup(char* start, char* end);
-extern char* strTrimFront(char* start);
-extern char* strTrim(char* start, char* end);
-extern char* strTrimDup(char* start, char* end);
-extern char* strTrimCopy(char* start, char* end, char* dst);
-extern char* strTokenDup(char* str, char* delimeter, char** save);
+extern char* strTrimFront(char* begin);
+extern char* strTrimBack(char* end);
+extern char* strTrim(char* begin, char* end);
+extern void strTrimCopy(char* dst, char* begin, char* end);
 extern void strParse(char* str, char** begin, char** end);
-extern char* strParseDup(char* str, char** save);
 extern BOOL isHexadecimalStr(char* str);
 extern BOOL isDecimalStr(char* str);
 

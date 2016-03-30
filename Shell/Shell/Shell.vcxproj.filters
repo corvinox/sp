@@ -56,5 +56,14 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="opcode.txt" />
+    <Text Include="input.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="2_5.asm">
+      <Filter>소스 파일</Filter>
+    </None>
+    <None Include="2_5.int">
+      <Filter>소스 파일</Filter>
+    </None>
   </ItemGroup>
 </Project>

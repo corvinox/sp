@@ -3,6 +3,13 @@
 #include <stdlib.h>
 #include "strutil.h"
 
+/*  */
+#define DIRTAB_BUCKET_SIZE 11
+#define OPTAB_BUCKET_SIZE  20
+#define SYMTAB_BUCKET_SIZE 20
+#define REGTAB_BUCKET_SIZE 16
+
+
 /* buffer에 관련된 값 정의 */
 #define BUFFER_LEN 1024
 #define BUFFER_SIZE_XXS 8
@@ -25,18 +32,38 @@
 #define MASK_12BITS 0x00000111
 #define MASK_24BITS 0x00111111
 
-static int hashFunc(void* key);
-static int hashCmp(void* a, void* b);
+static int directiveHashFunc(void* key);
+static int opcodeHashFunc(void* key);
+static int symbolHashFunc(void* key);
+static int registerHashFunc(void* key);
+static int entryCompare(const void* a, const void* b);
+static void entryRelease(void* data, void* aux); 
+
+
+static void directiveLoad(Assembler* asmblr);
 static void opcodeLoad(Assembler* asmblr);
-static void tableRelease(void* data, void* aux);
-static void preload(Assembler* asmblr);
+static void registerLoad(Assembler* asmblr);
+
+
 static void pass1(Assembler* asmblr, const char* filename);
 static void pass2(Assembler* asmblr, const char* filename);
 static void parseStatement(Assembler* asmblr, Statement* stmt, FILE* stream);
+
 static int getInstructionCode(Assembler* asmblr, char* str);
+static void execInstStart(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstEnd(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstByte(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstWord(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstResb(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstResw(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstBase(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+static void execInstOpcode(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux);
+
 static void intfileHeaderWrite(Statement* stmt, FILE* stream);
 static void intfileWrite(Statement* stmt, FILE* stream);
+
 static void lstfileWrite(Statement* stmt, FILE* stream);
+
 static void headerRecordWrite(char* name, int start, int length, FILE* stream);
 static void textRecordWrite(int start, char* code, FILE* stream);
 static void modificationRecordWrite(int start, int halfs, FILE* stream);
@@ -44,175 +71,8 @@ static void endRecordWrite(int excutable, FILE* stream);
 
 BOOL assemblerInitialize(Assembler* asmblr)
 {
-	int idx = 0;
-	asmblr->reg_table[idx].mnemonic = "A";
-	asmblr->reg_table[idx++].number = 0;
-	asmblr->reg_table[idx].mnemonic = "X";
-	asmblr->reg_table[idx++].number = 1;
-	asmblr->reg_table[idx].mnemonic = "L";
-	asmblr->reg_table[idx++].number = 2;
-	asmblr->reg_table[idx].mnemonic = "PC";
-	asmblr->reg_table[idx++].number = 8;
-	asmblr->reg_table[idx].mnemonic = "SW";
-	asmblr->reg_table[idx++].number = 9;
-	asmblr->reg_table[idx].mnemonic = "B";
-	asmblr->reg_table[idx++].number = 3;
-	asmblr->reg_table[idx].mnemonic = "S";
-	asmblr->reg_table[idx++].number = 4;
-	asmblr->reg_table[idx].mnemonic = "T";
-	asmblr->reg_table[idx++].number = 5;
-	asmblr->reg_table[idx].mnemonic = "F";
-	asmblr->reg_table[idx++].number = 6;
-
-	hashInitialize(&asmblr->op_table, hashFunc, hashCmp);
-	hashInitialize(&asmblr->sym_table, hashFunc, hashCmp);
-	opcodeLoad(asmblr);
-
-	return true;
-}
-
-void assemblerAssemble(Assembler* asmblr, const char* filename)
-{
-	FILE* fp = fopen(filename, "r");
-	Statement stmt;
-	while(!feof(fp)) {
-		parseStatement(asmblr, &stmt, fp);
-		if (stmt.is_invalid) {
-
-		}
-		else if (stmt.is_comment) {
-			printf("comment\n");
-		}
-		else {
-			printf("label: [%s], inst: [%s], operand: [%s]\n", stmt.label, stmt.instruction, stmt.operand);
-		}
-	}
-	fclose(fp);
-	return;
-
-
-	char buffer[256];
-	sscanf(filename, "%[^.]", buffer);
-
-	pass1(asmblr, buffer);
-	//pass2(asmblr, buffer);
-}
-
-void assemblerRelease(Assembler* asmblr)
-{
-	hashForeach(&asmblr->op_table, NULL, tableRelease);
-	hashClear(&asmblr->op_table);
-}
-
-/*************************************************************************************
-* 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
-*       기본으로 제공되는 hash function 이다.
-* 인자:
-* - key: key
-* 반환값: 해당 key를 이용하여 계산한 hash 값
-*************************************************************************************/
-static int hashFunc(void* key)
-{
-	char* str = (char*)key;
-	int sum = 0;
-	int len = strlen(str);
-	for (int i = 0; i < len; i++)
-		sum += str[i];
-
-	return sum % 20;
-}
-
-/*************************************************************************************
-* 설명: 임의의 key값을 넣으면 hash table의 entry 중에서 같은 key를 갖고 있는
-*       entry를 찾기 위한 비교 함수이다.
-* 인자:
-* - key0: entry의 key 혹은 사용자가 검색을 원하는 key. 같은지만 비교하므로 순서상관없음.
-* - key1: 사용자가 검색을 원하는 key 혹은 entry의 key. 같은지만 비교하므로 순서상관없음.
-* 반환값: 같으면 0, 다르면 그 이외의 값
-*************************************************************************************/
-static int hashCmp(void* key0, void* key1)
-{
-	char* str_a = (char*)key0;
-	char* str_b = (char*)key1;
-
-	return strcmp(str_a, str_b);
-}
-
-/*************************************************************************************
-* 설명: opcode.txt 파일로부터 opcode에 대한 정보(code, mnemonic, type) 등을
-*       읽어서 hash table에 저장한다. 각 정보는 공백으로 구분된다고 가정하고
-*       strtok를 이용하여 파일을 줄 단위로 읽어 파싱한다. 읽은 줄에 대해서
-*       파싱하는 도중에 예외가 발생하면 해당 줄은 건너뛰고 다음 줄을 읽는다.
-* 인자:
-* - asmblr: Assembler에 대한 정보를 담고 있는 구조체에 대한 포인터
-* 반환값: 없음
-*************************************************************************************/
-static void opcodeLoad(Assembler* asmblr)
-{
-	char buffer[BUFFER_LEN];
-	FILE* fp = fopen("./opcode.txt", "r");
-	if (fp == NULL) {
-		asmblr->error = ERR_NO_INIT;
-		return;
-	}
-
-	while (!feof(fp)) {
-		fgets(buffer, BUFFER_LEN, fp);
-		buffer[strlen(buffer) - 1] = 0;
-
-		/* parse opcode */
-		char* ptr = strtok(buffer, " \t");
-		if (ptr == NULL)
-			continue;
-		int code = (int)strtoul(ptr, NULL, 16);
-
-		/* parse mnemonic */
-		ptr = strtok(NULL, " \t");
-		if (ptr == NULL)
-			continue;
-
-		char* mne = strdup(ptr);
-		int* code_ptr = (int*)malloc(sizeof(int));
-		if (mne != NULL && code_ptr != NULL) {
-			*code_ptr = code;
-			hashInsert(&asmblr->op_table, mne, code_ptr);
-		}
-		else {
-			if (mne != NULL)
-				free(mne);
-			if (code_ptr != NULL)
-				free(code_ptr);
-		}
-	}
-}
-
-/*************************************************************************************
-* 설명: 어셈블러가 가진 opcode table과 symbol table은 hash table로 구성된다.
-*       두 테이블의 각 entry의 key, value에 값을 넣을 때 메모리를 할당했으므로,
-*       할당한 메모리를 해제해 주어야 한다. hash table의 모든 entry에 적용되는
-*       action function으로 data에 할당한 메모리를 해제하는 역할을 한다.
-* 인자:
-* - data: hash table 각 entry를 나타내는 변수.
-* - aux: 추가적으로 필요하면 활용하기 위한 변수. auxiliary
-* 반환값: 없음
-*************************************************************************************/
-static void tableRelease(void* data, void* aux)
-{
-	if (data != NULL) {
-		HashEntry* entry = (HashEntry*)data;
-		if (entry->key != NULL)
-			free(entry->key);
-		if (entry->value != NULL) {
-			free(entry->value);
-		}
-		free(data);
-	}
-}
-
-static void preload(Assembler* asmblr)
-{
-	//hashForeach(&asmblr->sym_table, NULL, );
-	//hashClear(&asmblr->sym_table);
+	/* register 정보 */
+	//int idx = 0;
 	//asmblr->reg_table[idx].mnemonic = "A";
 	//asmblr->reg_table[idx++].number = 0;
 	//asmblr->reg_table[idx].mnemonic = "X";
@@ -232,8 +92,361 @@ static void preload(Assembler* asmblr)
 	//asmblr->reg_table[idx].mnemonic = "F";
 	//asmblr->reg_table[idx++].number = 6;
 
-	for (int i = 0; i < REG_CNT; i++) {
-		//hashInsert(&asmblr->sym_table, asmblr->reg_table[i].mnemonic, )
+	/* directive table 초기화 */
+	hashInitialize(&asmblr->dir_table, DIRTAB_BUCKET_SIZE, directiveHashFunc, entryCompare);
+
+	/* opcode table 초기화 */
+	hashInitialize(&asmblr->op_table, OPTAB_BUCKET_SIZE, opcodeHashFunc, entryCompare);
+
+	/* symbol table 초기화 */
+	hashInitialize(&asmblr->sym_table, SYMTAB_BUCKET_SIZE, symbolHashFunc, entryCompare);
+
+	/* register table 초기화 */
+	hashInitialize(&asmblr->reg_table, REGTAB_BUCKET_SIZE, registerHashFunc, entryCompare);
+	
+	/* assembler directive를 table에 추가 */
+	directiveLoad(asmblr);
+
+	/* opcode file에서 opcode 정보를 읽어서 opcode table에 저장 */
+	opcodeLoad(asmblr);
+	if (asmblr->error != ERR_NO)
+		return false;
+
+	/* SIC/XE 머신에서 사용되는 register들을 table에 저장 */
+	registerLoad(asmblr);
+
+	return true;
+}
+
+void assemblerRelease(Assembler* asmblr)
+{
+	/* directive table에 할당한 메모리 해제 */
+	hashForeach(&asmblr->dir_table, NULL, entryRelease);
+	hashRelease(&asmblr->dir_table);
+	
+	/* opcode talbe에 할당한 메모리 해제 */
+	hashForeach(&asmblr->op_table, NULL, entryRelease);
+	hashRelease(&asmblr->op_table);
+
+	/* symbol talbe에 할당한 메모리 해제 */
+	hashForeach(&asmblr->sym_table, NULL, entryRelease);
+	hashRelease(&asmblr->sym_table);
+
+	/* register talbe에 할당한 메모리 해제 */
+	hashForeach(&asmblr->reg_table, NULL, entryRelease);
+	hashRelease(&asmblr->reg_table);
+}
+
+void assemblerAssemble(Assembler* asmblr, const char* filename)
+{
+	FILE* fp = fopen(filename, "r");
+	Statement stmt;
+
+	char buffer[256];
+	sscanf(filename, "%[^.]", buffer);
+
+
+	hashForeach(&asmblr->sym_table, NULL, entryRelease);
+	hashClear(&asmblr->sym_table);
+
+	pass1(asmblr, buffer);
+
+	//pass2(asmblr, buffer);
+}
+
+void assemblerPrintOpcode(Assembler* asmblr, char* opcode, FILE* stream)
+{
+	AsmInstruction* inst = (AsmInstruction*)hashGetValue(&asmblr->op_table, opcode);
+	if (inst == NULL)
+		fprintf(stream, "        해당 정보를 찾을 수 없습니다.\n");
+	else
+		fprintf(stream, "        opcode is %X\n", (int)inst->aux);
+}
+
+void assemblerPrintOpcodeTable(Assembler* asmblr, FILE* stream)
+{
+	for (int i = 0; i < asmblr->op_table.bucket_size; i++) {
+		Node* ptr;
+		fprintf(stream, "        %-2d : ", i + 1);
+
+		ptr = asmblr->op_table.buckets[i].head;
+		if (ptr != NULL) {
+			HashEntry* entry = (HashEntry*)ptr->data;
+			if (entry != NULL) {
+				AsmInstruction* inst = (AsmInstruction*)entry->value;
+				fprintf(stream, "[%s, %02X]", (char*)entry->key, (int)inst->aux);
+			}
+			
+			ptr = ptr->next;
+
+			while (ptr != NULL) {
+				entry = (HashEntry*)ptr->data;
+				if (entry != NULL) {
+					AsmInstruction* inst = (AsmInstruction*)entry->value;
+					fprintf(stream, " → [%s, %02X]", (char*)entry->key, (int)inst->aux);
+				}
+				ptr = ptr->next;
+			}
+		}
+		fprintf(stream, "\n");
+	}
+}
+
+void assemblerPrintSymbolTable(Assembler* asmblr, FILE* stream)
+{
+	HashEntry** entries = (HashEntry**)calloc(sizeof(HashEntry*), asmblr->sym_table.size);
+	int idx = 0;
+	for (int i = 0; i < asmblr->sym_table.bucket_size; i++) {
+		Node* ptr = asmblr->sym_table.buckets[i].head;
+		while (ptr != NULL) {
+			entries[idx++] = (HashEntry*)ptr->data;
+			ptr = ptr->next;
+		}
+	}
+
+	qsort(entries, asmblr->sym_table.size, sizeof(HashEntry*), entryCompare);
+
+	for (int i = 0; i < asmblr->sym_table.size; i++)
+		fprintf(stream, "\t%s\t%04X\n", (char*)entries[i]->key, *(int*)entries[i]->value);
+	
+	free(entries);
+}
+
+/*************************************************************************************
+* 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
+*       기본으로 제공되는 hash function 이다.
+* 인자:
+* - key: key
+* 반환값: 해당 key를 이용하여 계산한 hash 값
+*************************************************************************************/
+static int directiveHashFunc(void* key)
+{
+	char* str = (char*)key;
+	int sum = 0;
+	int len = strlen(str);
+	for (int i = 0; i < len; i++)
+		sum += str[i];
+
+	return sum % DIRTAB_BUCKET_SIZE;
+}
+
+/*************************************************************************************
+* 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
+*       기본으로 제공되는 hash function 이다.
+* 인자:
+* - key: key
+* 반환값: 해당 key를 이용하여 계산한 hash 값
+*************************************************************************************/
+static int opcodeHashFunc(void* key)
+{
+	char* str = (char*)key;
+	int sum = 0;
+	int len = strlen(str);
+	for (int i = 0; i < len; i++)
+		sum += str[i];
+
+	return sum % OPTAB_BUCKET_SIZE;
+}
+
+/*************************************************************************************
+* 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
+*       기본으로 제공되는 hash function 이다.
+* 인자:
+* - key: key
+* 반환값: 해당 key를 이용하여 계산한 hash 값
+*************************************************************************************/
+static int symbolHashFunc(void* key)
+{
+	char* str = (char*)key;
+	int sum = 0;
+	int len = strlen(str);
+	for (int i = 0; i < len; i++)
+		sum += str[i];
+
+	return sum % SYMTAB_BUCKET_SIZE;
+}
+
+/*************************************************************************************
+* 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
+*       기본으로 제공되는 hash function 이다.
+* 인자:
+* - key: key
+* 반환값: 해당 key를 이용하여 계산한 hash 값
+*************************************************************************************/
+static int registerHashFunc(void* key)
+{
+	char* str = (char*)key;
+	int sum = 0;
+	int len = strlen(str);
+	for (int i = 0; i < len; i++)
+		sum += str[i];
+
+	return sum % REGTAB_BUCKET_SIZE;
+}
+
+/*************************************************************************************
+* 설명: 임의의 key값을 넣으면 hash table의 entry 중에서 같은 key를 갖고 있는
+*       entry를 찾기 위한 비교 함수이다.
+* 인자:
+* - key0: entry의 key 혹은 사용자가 검색을 원하는 key. 같은지만 비교하므로 순서상관없음.
+* - key1: 사용자가 검색을 원하는 key 혹은 entry의 key. 같은지만 비교하므로 순서상관없음.
+* 반환값: 같으면 0, 다르면 그 이외의 값
+*************************************************************************************/
+static int entryCompare(void* key0, void* key1)
+{
+	char* str_a = (char*)key0;
+	char* str_b = (char*)key1;
+
+	return strcmp(str_b, str_a);
+}
+
+/*************************************************************************************
+* 설명: 어셈블러가 가진 opcode table과 symbol table은 hash table로 구성된다.
+*       두 테이블의 각 entry의 key, value에 값을 넣을 때 메모리를 할당했으므로,
+*       할당한 메모리를 해제해 주어야 한다. hash table의 모든 entry에 적용되는
+*       action function으로 data에 할당한 메모리를 해제하는 역할을 한다.
+* 인자:
+* - data: hash table 각 entry를 나타내는 변수.
+* - aux: 추가적으로 필요하면 활용하기 위한 변수. auxiliary
+* 반환값: 없음
+*************************************************************************************/
+static void entryRelease(void* data, void* aux)
+{
+	if (data != NULL) {
+		HashEntry* entry = (HashEntry*)data;
+		if (entry != NULL) {
+			free(entry->key);
+			free(entry->value);
+		}
+		free(entry);
+	}
+}
+
+/*************************************************************************************
+* 설명: assembler에서 사용되는 유사 instruction인 assembler directive 들을
+*       hash table에 저장하여 초기화한다.
+* 인자:
+* - asmblr: Assembler에 대한 정보를 담고 있는 구조체에 대한 포인터
+* 반환값: 없음
+*************************************************************************************/
+static void directiveLoad(Assembler* asmblr)
+{
+	AsmInstruction inst_initializer[] = {
+		{ "START", INST_START, NULL, execInstStart },
+		{ "END",   INST_END,   NULL, execInstEnd   },
+		{ "BYTE",  INST_BYTE,  NULL, execInstByte  },
+		{ "WORD",  INST_WORD,  NULL, execInstWord  },
+		{ "RESB",  INST_RESB,  NULL, execInstResb  },
+		{ "RESW",  INST_RESW,  NULL, execInstResw  },
+		{ "BASE",  INST_BASE,  NULL, execInstBase  },
+	};
+
+	for (int i = 0; i < 7; i++) {
+		AsmInstruction* inst = (AsmInstruction*)malloc(sizeof(AsmInstruction));
+		inst->mnemonic = strdup(inst_initializer[i].mnemonic); 
+		inst->inst_code = inst_initializer[i].inst_code;
+		inst->aux = inst_initializer[i].aux;
+		inst->exec_func = inst_initializer[i].exec_func;
+
+		hashInsert(&asmblr->dir_table, inst->mnemonic, inst);
+	}
+}
+
+/*************************************************************************************
+* 설명: opcode.txt 파일로부터 opcode에 대한 정보(code, mnemonic, type) 등을
+*       읽어서 hash table에 저장한다. 각 정보는 공백으로 구분된다고 가정하고
+*       strtok를 이용하여 파일을 줄 단위로 읽어 파싱한다. 읽은 줄에 대해서
+*       파싱하는 도중에 예외가 발생하면 해당 줄은 건너뛰고 다음 줄을 읽는다.
+* 인자:
+* - asmblr: Assembler에 대한 정보를 담고 있는 구조체에 대한 포인터
+* 반환값: 없음
+*************************************************************************************/
+static void opcodeLoad(Assembler* asmblr)
+{	
+	FILE* fp = fopen("./opcode.txt", "r");
+	if (fp == NULL) {
+		asmblr->error = ERR_NO_INIT;
+		return;
+	}
+
+	int code;
+	char buffer[BUFFER_LEN];
+	while (!feof(fp)) {
+		if (fgets(buffer, BUFFER_LEN, fp) == NULL)
+			break;
+
+		/* parse opcode */
+		char* ptr = strtok(buffer, " \t");
+		if (ptr == NULL)
+			continue;
+
+		char* endPtr;
+		int code = (int)strtoul(ptr, &endPtr, 16);
+		/* opcode에 대한 code는 1Byte 이내의 값이므로 1Byte가 아니면 */
+		if (endPtr - ptr != 2)
+			continue;
+		/* opcode는 음수는 안됨 */
+		else if (code < 0)
+			continue;
+
+		/* parse mnemonic */
+		ptr = strtok(NULL, " \t");
+		if (ptr == NULL)
+			continue;
+
+		char* mnemonic = ptr;
+
+		/* parse format */
+		ptr = strtok(NULL, " \t");
+		if (ptr == NULL)
+			continue;
+
+		int format = 0;
+		if (ptr[0] == '1' && ptr[1] == 0)
+			format = 1;
+		else if (ptr[0] == '2' && ptr[1] == 0)
+			format = 2;
+		else if (ptr[0] == '3' && ptr[1] == '/' && ptr[2] == '4')
+			format = 3;
+		else
+			continue;
+
+		AsmInstruction* inst = (AsmInstruction*)malloc(sizeof(AsmInstruction));
+		inst->mnemonic = strdup(mnemonic);
+		inst->inst_code = INST_OPCODE;
+		inst->aux = (void*)code;
+		inst->exec_func = execInstOpcode;
+
+		hashInsert(&asmblr->op_table, inst->mnemonic, inst);
+	}
+}
+
+/*************************************************************************************
+* 설명: SIC/XE 머신에서 사용되는 register 들의 mnemonic과 매핑되는 번호를 table에 저장.
+* 인자:
+* - asmblr: Assembler에 대한 정보를 담고 있는 구조체에 대한 포인터
+* 반환값: 없음
+*************************************************************************************/
+static void registerLoad(Assembler* asmblr)
+{
+	AsmRegister reg_initializer[] = {
+		{ "A",  0 },
+		{ "X",  1 },
+		{ "L",  2 },
+		{ "B",  3 },
+		{ "S",  4 },
+		{ "T",  5 },
+		{ "F",  6 },
+		{ "PC", 8 },
+		{ "SW", 9 }
+	};
+
+	for (int i = 0; i < 9; i++) {
+		AsmRegister* reg = (AsmRegister*)calloc(1, sizeof(AsmRegister*));
+		reg->mnemonic = strdup(reg_initializer[i].mnemonic);
+		reg->number= reg_initializer[i].number;
+
+		hashInsert(&asmblr->reg_table, reg->mnemonic, reg);
 	}
 }
 
@@ -255,34 +468,70 @@ static void pass1(Assembler* asmblr, const char* filename)
 		return;
 	}
 
+	/*  line number 초기화 */
 	stmt.line_number = 0;
 
-	//parseStatement(&stmt, buffer, BUFFER_LEN, fp_asm);
-	if (!strcmp(stmt.instruction, "START")) {
+	/* asm 파일에서 읽기 */
+	parseStatement(asmblr, &stmt, fp_asm);
+	//if (!strcmp(stmt.instruction, "START")) {
+	if (stmt.inst_code == INST_START) {
 		if (!isHexadecimalStr(stmt.operand)) {
-			// error
-			printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
+			/* error */
+			printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 		}
-		// save #[OPERAND] as starting address
+		/* save #[OPERAND] as starting address */
 		asmblr->start_addr = strtol(stmt.operand, NULL, 16);
 
-		// write line to intermediate file
-		//parseStatement(&stmt, buffer, BUFFER_LEN, fp_asm);
+		/* 중간 파일에 헤더 정보 쓰기 */
+		intfileHeaderWrite(&stmt, fp_int);
+		/* asm 파일에서 읽기 */
+		parseStatement(asmblr, &stmt, fp_asm);
 	}
 	else {
 		asmblr->start_addr = 0;
 		asmblr->locctr = 0;
+		/* 중간 파일에 헤더 정보 쓰기 */
+		intfileHeaderWrite(&stmt, fp_int);
 	}
 
-	while (strcmp(stmt.instruction, "END")) {
-		if (!stmt.is_comment) {
+	while (!feof(fp_asm)) {
+		/* 주석 라인은 건너뜀 */
+		if (!stmt.is_invalid && !stmt.is_comment) {
+			/* label에 대한 처리 */
 			if (stmt.has_label) {
-				// search SYMTAB for LABEL
+				/* symbol table에서 label을 찾으면 중복 에러, 못찾으면 저장 */
 				void* label = hashGetValue(&asmblr->sym_table, stmt.label);
 				if (label != NULL) {
-					// error
+					/* error */
 					asmblr->error = ERR_DUPLICATE_SYMBOL;
-					printf("        line %d: 이미 존재하는 SYMBOL (%s)\n", stmt.line_number, (stmt.label == NULL ? "" : stmt.label));
+					printf("        line %d: 이미 존재하는 SYMBOL (%s)\n", stmt.line_number, stmt.label);
+				}
+				else {
+					char* key = strdup(stmt.label);
+					int* value = (int*)malloc(sizeof(int));
+					*value = asmblr->locctr;
+
+					/* insert (LABEL, LOCCTR) into SYMTAB */
+					hashInsert(&asmblr->sym_table, key, value);
+				}
+			}
+		}
+	}
+
+
+	//while (strcmp(stmt.instruction, "END")) {
+	while (stmt.inst_code != INST_END) {
+		/* 주석 라인은 건너뜀 */
+		if (!stmt.is_invalid && !stmt.is_comment) {
+
+			/* label에 대한 처리 */
+			if (stmt.has_label) {
+				/* symbol table에서 label을 찾으면 중복 에러, 못찾으면 저장 */
+				void* label = hashGetValue(&asmblr->sym_table, stmt.label);
+				if (label != NULL) {
+					/* error */
+					asmblr->error = ERR_DUPLICATE_SYMBOL;
+					printf("        line %d: 이미 존재하는 SYMBOL (%s)\n", stmt.line_number, stmt.label);
 				}
 				else {
 					char* key = strdup(stmt.label);
@@ -294,6 +543,7 @@ static void pass1(Assembler* asmblr, const char* filename)
 				}
 			}
 
+			/* instruction 및 assembler directive 들에 대한 처리 */
 			void* value = hashGetValue(&asmblr->op_table, stmt.instruction);
 			if (value != NULL) {
 				asmblr->locctr += (stmt.is_extended ? 4 : 3);
@@ -307,8 +557,8 @@ static void pass1(Assembler* asmblr, const char* filename)
 					asmblr->locctr += 3 * operand;
 				}
 				else {
-					// error
-					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
+					/* error */
+					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 				}
 			}
 			else if (!strcmp(stmt.instruction, "RESB")) {
@@ -317,34 +567,37 @@ static void pass1(Assembler* asmblr, const char* filename)
 					asmblr->locctr += operand;
 				}
 				else {
-					// error
-					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
+					/* error */
+					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 				}
 			}
 			else if (!strcmp(stmt.instruction, "BYTE")) {
 				int len = strlen(stmt.operand);
 
-				if (stmt.operand[0] == '\'' && stmt.operand[len - 1] == '\'') {
+				if (stmt.operand[1] == '\'' && stmt.operand[len - 1] == '\'') {
 					if (stmt.operand[0] == 'C')
 						asmblr->locctr += len - 3;
 					else if (stmt.operand[0] == 'X')
 						asmblr->locctr += (len - 2) / 2;
 					else {
-						// error
-						printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
+						/* error */
+						printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 					}
 				}
 				else {
-					// error
-					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, (stmt.operand == NULL ? "" : stmt.operand));
+					/* error */
+					printf("        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 				}
 			}
-		}
 
-		// write int
-		//parseStatement(&stmt, buffer, BUFFER_LEN, fp_asm);
+			/* 중간 파일에 쓰기 */
+			intfileWrite(&stmt, fp_int);
+		}
+		/* asm 파일에서 읽기 */
+		parseStatement(asmblr, &stmt, fp_asm);
 	}
-	// write int
+	/* 중간 파일에 쓰기 */
+	intfileWrite(&stmt, fp_int);
 	asmblr->prog_len = asmblr->locctr - asmblr->start_addr;
 
 	fclose(fp_asm);
@@ -637,6 +890,79 @@ static int getInstructionCode(Assembler* asmblr, char* str)
 	return INST_NO;
 }
 
+static void execInstStart(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+	/* START instruction은 첫 라인에만 나타나야함 */
+	if (stmt->line_number != 5) {
+		/* error */
+		fprintf(stream, "        line %d: START는 중간에 사용될 수 없습니다.\n", stmt->line_number);
+	}
+}
+
+static void execInstEnd(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+
+}
+
+static void execInstByte(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+	int len = strlen(stmt->operand);
+
+	if (stmt->operand[1] == '\'' && stmt->operand[len - 1] == '\'') {
+		if (stmt->operand[0] == 'C')
+			asmblr->locctr += len - 3;
+		else if (stmt->operand[0] == 'X')
+			asmblr->locctr += (len - 2) / 2;
+		else {
+			/* error */
+			fprintf(stream, "        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
+		}
+	}
+	else {
+		/* error */
+		fprintf(stream, "        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
+	}
+}
+
+static void execInstWord(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+	asmblr->locctr += 3;
+}
+
+static void execInstResb(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+	if (isDecimalStr(stmt->operand)) {
+		int operand = strtol(stmt->operand, NULL, 10);
+		asmblr->locctr += operand;
+	}
+	else {
+		/* error */
+		fprintf(stream, "        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
+	}
+}
+
+static void execInstResw(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+	if (isDecimalStr(stmt->operand)) {
+		int operand = strtol(stmt->operand, NULL, 10);
+		asmblr->locctr += 3 * operand;
+	}
+	else {
+		/* error */
+		fprintf(stream, "        line %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
+	}
+}
+
+static void execInstBase(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+
+}
+
+static void execInstOpcode(Assembler* asmblr, Statement* stmt, FILE* stream, void* aux)
+{
+	asmblr->locctr += (stmt->is_extended ? 4 : 3);
+}
+
 static void intfileHeaderWrite(Statement* stmt, FILE* stream)
 {
 	fprintf(stream, "%d", stmt->line_number);
@@ -644,7 +970,10 @@ static void intfileHeaderWrite(Statement* stmt, FILE* stream)
 
 static void intfileWrite(Statement* stmt, FILE* stream)
 {
-	fprintf(stream, "%d", stmt->line_number);
+	fprintf(stream, "%d %d\n", stmt->line_number, stmt->is_extended);
+	fprintf(stream, "%s\n", stmt->label);
+	fprintf(stream, "%s\n", stmt->instruction);
+	fprintf(stream, "%s\n", stmt->operand);
 }
 
 static void lstfileWrite(Statement* stmt, FILE* stream)

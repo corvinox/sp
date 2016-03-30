@@ -163,7 +163,12 @@
     <ClInclude Include="mytype.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="input.txt" />
     <Text Include="opcode.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="2_5.asm" />
+    <None Include="2_5.int" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

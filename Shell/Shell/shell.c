@@ -472,7 +472,7 @@ static void runCmdReset(Shell* shell)
 }
 
 /*************************************************************************************
-* 설명: 인자로 받은 opcode의 mnemonic에 대한 code값을 출력한다.
+* 설명: 인자로 받은 opcode에 대한 정보를 출력하기 위해 assembler api를 호출한다.
 * 인자:
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
@@ -484,45 +484,23 @@ static void runCmdOpcode(Shell* shell)
 		return;
 	}
 
-	int* code = (int*)hashGetValue(&shell->op_table, shell->args[0]);
-	if (code == NULL)
-		printf("        해당 정보를 찾을 수 없습니다.\n");
-	else
-		printf("        opcode is %X\n", *code);
+	assemblerPrintOpcode(&shell->assembler, shell->args[0], stdout);
 }
 
 /*************************************************************************************
-* 설명: 현재 hash table에 저장된 opcode를 모두 출력한다.
+* 설명: 모든 opcode에 대한 정보를 출력하기 위해 assembler api를 호출한다.
 * 인자:
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
 * 반환값: 없음
 *************************************************************************************/
 static void runCmdOplist(Shell* shell)
 {
-	int i;
 	if (shell->argc != 0) {
 		shell->error = ERR_INVALID_USE;
 		return;
 	}
 
-	for (i = 0; i < BUCKET_SIZE; i++) {
-		Node* ptr;
-		printf("        %-2d : ", i + 1);
-
-		ptr = shell->op_table.buckets[i].head;
-		if (ptr != NULL) {
-			HashEntry* entry = (HashEntry*)ptr->data;
-			printf("[%s, %02X]", (char*)entry->key, *(int*)entry->value);
-			ptr = ptr->next;
-
-			while (ptr != NULL) {
-				HashEntry* entry = (HashEntry*)ptr->data;
-				printf(" → [%s, %02X]", (char*)entry->key, *(int*)entry->value);
-				ptr = ptr->next;
-			}
-		}
-		printf("\n");
-	}
+	assemblerPrintOpcodeTable(&shell->assembler, stdout);
 }
 
 /*************************************************************************************
@@ -593,6 +571,8 @@ static void runCmdSymbol(Shell* shell)
 		shell->error = ERR_INVALID_USE;
 		return;
 	}
+
+	assemblerPrintSymbolTable(&shell->assembler, stdout);
 }
 
 /*************************************************************************************
@@ -691,13 +671,17 @@ static void parseCommandLine(Shell* shell)
 	char* ptr2;
 
 	/* 라인 입력 */
-	fgets(buffer, LINE_MAX, stdin);
+	if (fgets(buffer, LINE_MAX, stdin) == NULL) {
+		shell->error = ERR_EMPTY;
+		return;
+	}
 
-	/* \n 제거 */
-	buffer[strlen(buffer) - 1] = 0;
+
+	/* trim */
+	ptr = strTrim(buffer, buffer + strlen(buffer));
 
 	/* shell의 command line에 복사하여 저장 */
-	strncpy(shell->cmd_line, buffer, LINE_MAX);
+	strncpy(shell->cmd_line, ptr, LINE_MAX);
 
 	/* 명령어를 파싱*/
 	ptr = strtok(buffer, " \t");
