@@ -1,3 +1,4 @@
+opcodelist
 assemble 2_5.asm
 symbol
 q

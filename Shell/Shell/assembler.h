@@ -6,9 +6,12 @@
 #include "hash.h"
 
 #define COMMENT_LEN     1024
-#define LABEL_LEN       8
+#define LABEL_LEN_MAX   8
 #define INSTRUCTION_LEN 8
 #define OPERAND_LEN     128
+#define FILENAME_LEN_MAX 16
+
+typedef void (*ExecFuncPtr)(struct _Assembler*, struct _Statement*, FILE*);
 
 typedef enum _AsmErrorCode
 {
@@ -47,14 +50,15 @@ typedef struct _Statement
 	int addr_mode;
 	int error;
 	BOOL is_invalid;
+	BOOL is_empty;
 	BOOL is_extended;
 	BOOL is_indexed;
 	BOOL is_comment;
 	BOOL has_label;
 	BOOL has_operand;
 
-	char label[LABEL_LEN];
-	char instruction[INSTRUCTION_LEN];
+	struct _AsmInstruction* instruction;
+	char label[LABEL_LEN_MAX];
 	char operand[OPERAND_LEN];
 } Statement;
 
@@ -72,29 +76,36 @@ typedef struct _Register
 	int number;
 } AsmRegister;
 
+typedef struct _AsmInstruction
+{
+	char* mnemonic;
+	int value;
+	void* aux;
+	ExecFuncPtr exec_func;
+} AsmInstruction;
+
 typedef struct _Assembler
 {
 	int error;
 	int prog_len;
 	int start_addr;
 	int locctr;
+
 	HashTable dir_table;
 	HashTable op_table;
 	HashTable reg_table;
 	HashTable sym_table;
-} Assembler;
 
-typedef struct
-{
-	char* mnemonic;
-	int inst_code;
-	void* aux;
-	void(*exec_func)(Assembler*, Statement*, FILE*, void* aux);
-} AsmInstruction;
+	char in_filename[FILENAME_LEN_MAX];
+	char int_filename[FILENAME_LEN_MAX];
+	char lst_filename[FILENAME_LEN_MAX];
+	char obj_filename[FILENAME_LEN_MAX];
+	char prog_name[LABEL_LEN_MAX];
+} Assembler;
 
 extern BOOL assemblerInitialize(Assembler* asmblr);
 extern void assemblerRelease(Assembler* asmblr);
-extern void assemblerAssemble(Assembler* asmblr, const char* filename);
+extern void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream);
 extern void assemblerPrintOpcode(Assembler* asmblr, char* opcode, FILE* stream);
 extern void assemblerPrintOpcodeTable(Assembler* asmblr, FILE* stream);
 extern void assemblerPrintSymbolTable(Assembler* asmblr, FILE* stream);

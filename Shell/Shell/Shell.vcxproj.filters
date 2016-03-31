@@ -33,25 +33,37 @@
     <ClCompile Include="assembler.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="asmpass1.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="asmpass2.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="list.h">
-      <Filter>소스 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="hash.h">
-      <Filter>소스 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="shell.h">
-      <Filter>소스 파일</Filter>
+    <ClInclude Include="asmpass1.h">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="assembler.h">
-      <Filter>소스 파일</Filter>
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="hash.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="list.h">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="strutil.h">
-      <Filter>소스 파일</Filter>
+      <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="mytype.h">
-      <Filter>소스 파일</Filter>
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="shell.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="asmpass2.h">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

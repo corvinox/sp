@@ -73,6 +73,16 @@ void strParse(char* str, char** begin, char** end)
 	}
 }
 
+int strToInt(char* str, int radix, BOOL* error) {
+	char* end_ptr;
+	int len = strlen(str);
+	int value = strtol(str, &end_ptr, radix);
+	if (error != NULL)
+		*error = (BOOL)(end_ptr - str < len);
+	return value;
+}
+
+
 BOOL isHexadecimalStr(char* str)
 {
 	char* ptr = str;

@@ -516,7 +516,7 @@ static void runCmdAssemble(Shell* shell)
 		return;
 	}
 
-	assemblerAssemble(&shell->assembler, shell->args[0]);
+	assemblerAssemble(&shell->assembler, shell->args[0], stdout);
 }
 
 /*************************************************************************************
