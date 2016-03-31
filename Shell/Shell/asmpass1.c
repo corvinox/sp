@@ -1,6 +1,7 @@
 ﻿#include "asmpass1.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "mytype.h"
 #include "assembler.h"
 #include "strutil.h"
@@ -67,21 +68,28 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 
 		/* label에 대한 처리 */
 		if (stmt.has_label) {
-			/* symbol table에서 label을 찾으면 중복 에러, 못찾으면 저장 */
-			void* label = hashGetValue(&asmblr->sym_table, stmt.label);
-			if (label != NULL) {
+			if (!isalpha(stmt.label[0])) {
 				/* error */
-				asmblr->error = ERR_DUPLICATE_SYMBOL;
 				stmt.error = true;
-				fprintf(log_stream, "LINE %d: SYMBOL(%s)이 이미 존재합니다.\n", stmt.line_number, stmt.label);
+				fprintf(log_stream, "LINE %d: SYMBOL(%s)이 알파벳으로 시작하지 않습니다.\n", stmt.line_number, stmt.label);
 			}
 			else {
-				char* key = strdup(stmt.label);
-				int* value = (int*)malloc(sizeof(int));
-				*value = asmblr->locctr;
+				/* symbol table에서 label을 찾으면 중복 에러, 못찾으면 저장 */
+				void* label = hashGetValue(&asmblr->sym_table, stmt.label);
+				if (label != NULL) {
+					/* error */
+					asmblr->error = ERR_DUPLICATE_SYMBOL;
+					stmt.error = true;
+					fprintf(log_stream, "LINE %d: SYMBOL(%s)이 이미 존재합니다.\n", stmt.line_number, stmt.label);
+				}
+				else {
+					char* key = strdup(stmt.label);
+					int* value = (int*)malloc(sizeof(int));
+					*value = asmblr->locctr;
 
-				/* insert (LABEL, LOCCTR) into SYMTAB */
-				hashInsert(&asmblr->sym_table, key, value);
+					/* insert (LABEL, LOCCTR) into SYMTAB */
+					hashInsert(&asmblr->sym_table, key, value);
+				}
 			}
 		}
 
