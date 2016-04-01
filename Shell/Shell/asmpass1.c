@@ -4,18 +4,22 @@
 #include <ctype.h>
 #include "mytype.h"
 #include "assembler.h"
+#include "asminstruction.h"
 #include "strutil.h"
 
 /* buffer에 관련된 값 정의 */
 #define BUFFER_LEN 1024
 
 static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream);
-static AsmInstruction* getInstruction(Assembler* asmblr, char* str);
 static void intfileWrite(Statement* stmt, FILE* stream);
 
 
 BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 {
+	/* assembler pass1 진행 상태로 전환 */
+	asmblr->state = STAT_RUN_PASS1;
+	asmblr->pc_value = 0;
+
 	Statement stmt = { 0, };
 
 	FILE* fp_asm = fopen(asmblr->in_filename, "r");
@@ -23,9 +27,13 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 	if (fp_asm == NULL || fp_int == NULL) {
 		if (fp_asm)
 			fclose(fp_asm);
+		else
+			fprintf(log_stream, "%s 파일을 열 수 없습니다.\n", asmblr->in_filename);
 		if (fp_int)
-			fclose(fp_int);
-		return;
+			fclose(fp_int); 
+		else
+			fprintf(log_stream, "%s 파일을 열 수 없습니다.\n", asmblr->int_filename);
+		return false;
 	}
 
 	BOOL pass_error = false;
@@ -34,9 +42,9 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 	/* 라인 넘버 초기화 */
 	stmt.line_number = 0;
 
-	while (!feof(fp_asm) && stmt.inst_code != INST_END) {
+	while (!feof(fp_asm)){// && stmt.inst_code != INST_END) {
 		/* statement 초기화 */
-		stmt.loc = asmblr->locctr;
+		stmt.loc = asmblr->pc_value;
 		stmt.error = false;
 		stmt.is_comment = false;
 		stmt.is_empty = false;
@@ -71,7 +79,7 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 			if (!isalpha(stmt.label[0])) {
 				/* error */
 				stmt.error = true;
-				fprintf(log_stream, "LINE %d: SYMBOL(%s)이 알파벳으로 시작하지 않습니다.\n", stmt.line_number, stmt.label);
+				fprintf(log_stream, "LINE %d: SYMBOL (%s)이 알파벳으로 시작하지 않습니다.\n", stmt.line_number, stmt.label);
 			}
 			else {
 				/* symbol table에서 label을 찾으면 중복 에러, 못찾으면 저장 */
@@ -80,14 +88,14 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 					/* error */
 					asmblr->error = ERR_DUPLICATE_SYMBOL;
 					stmt.error = true;
-					fprintf(log_stream, "LINE %d: SYMBOL(%s)이 이미 존재합니다.\n", stmt.line_number, stmt.label);
+					fprintf(log_stream, "LINE %d: SYMBOL (%s)이 이미 존재합니다.\n", stmt.line_number, stmt.label);
 				}
 				else {
 					char* key = strdup(stmt.label);
 					int* value = (int*)malloc(sizeof(int));
-					*value = asmblr->locctr;
+					*value = asmblr->pc_value;
 
-					/* insert (LABEL, LOCCTR) into SYMTAB */
+					/* 파싱한 Label을 symbol table에 저장 */
 					hashInsert(&asmblr->sym_table, key, value);
 				}
 			}
@@ -108,7 +116,7 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 			/* 각 instruction 및 assembler directive에 대한 처리 함수 실행 */
 			stmt.instruction->exec_func(asmblr, &stmt, log_stream);
 			if (!strcmp(stmt.instruction->mnemonic, "END"))
-				pass_error = true;
+				pass_end = true;
 		}
 		
 		if (stmt.error) {
@@ -122,7 +130,7 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 	}
 
 	/* End 문이 없음 */
-	if (asmblr->prog_len == 0) {
+	if (!pass_end) {
 		fprintf(log_stream, "LINE %d: END STATEMENT가 존재하지 않습니다.\n", stmt.line_number);
 		pass_error = true;
 	}
@@ -131,97 +139,6 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 	fclose(fp_int);
 
 	return !pass_error;
-}
-
-void execInstStart(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	/* START instruction은 첫 라인에만 나타나야함 */
-	if (stmt->line_number != 5) {
-		/* error */
-		fprintf(log_stream, "LINE %d: START는 중간에 사용될 수 없습니다.\n", stmt->line_number);
-		return;
-	}
-	
-	/* operand를 갖고 있지 않으면 에러 */
-	if (!stmt->has_operand) {
-		/* error */
-		fprintf(log_stream, "LINE %d: START INSTRUCTION은 OPERAND가 필요합니다.\n", stmt->line_number);
-		return;
-	}
-
-	BOOL error;
-	int start_addr = strToInt(stmt->operand, 16, &error);
-	if (error || start_addr < 0 || start_addr > 0xFFFFF) {
-		/* error */
-		fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
-		return;
-	}
-
-	asmblr->locctr = start_addr;
-	asmblr->start_addr = start_addr;
-}
-
-void execInstEnd(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	/* program의 길이 계산 */
-	asmblr->prog_len = asmblr->locctr - asmblr->start_addr;
-}
-
-void execInstByte(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	int len = strlen(stmt->operand);
-
-	if (stmt->operand[1] == '\'' && stmt->operand[len - 1] == '\'') {
-		if (stmt->operand[0] == 'C')
-			asmblr->locctr += len - 3;
-		else if (stmt->operand[0] == 'X')
-			asmblr->locctr += (len - 2) / 2;
-		else {
-			/* error */
-			fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
-		}
-	}
-	else {
-		/* error */
-		fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
-	}
-}
-
-void execInstWord(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	asmblr->locctr += 3;
-}
-
-void execInstResb(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	BOOL error;
-	int operand = strToInt(stmt->operand, 10, &error);
-	if (error) {
-		/* error */
-		fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
-	}
-	asmblr->locctr += operand;
-}
-
-void execInstResw(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	BOOL error;
-	int operand = strToInt(stmt->operand, 10, &error);
-	if (error) {
-		/* error */
-		fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
-	}
-	asmblr->locctr += 3 * operand;
-}
-
-void execInstBase(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-
-}
-
-void execInstOpcode(Assembler* asmblr, Statement* stmt, FILE* log_stream)
-{
-	asmblr->locctr += (stmt->is_extended ? 4 : (int)stmt->instruction->aux);
 }
 
 static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
@@ -253,7 +170,7 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 	strParse(begin, &begin, &end);
 	strncpy(buffer2, begin, end - begin);
 	buffer2[end - begin] = 0;
-	
+
 	/* 파싱한 첫 문자열이 instruction이 아니면 label로 인식 */
 	stmt->instruction = getInstruction(asmblr, (buffer2[0] == '+' ? buffer2 + 1 : buffer2));
 	if (stmt->instruction == NULL) {
@@ -267,7 +184,7 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 
 		/* label 뒤에 파싱한 문자열에서 instruction을 추출 */
 		stmt->instruction = getInstruction(asmblr, (buffer2[0] == '+' ? buffer2 + 1 : buffer2));
-		if ( stmt->instruction != NULL) {
+		if (stmt->instruction != NULL) {
 			/* Instruction을 파싱했는데, 만약 앞에 +가 붙어 있으면 확장 포맷 */
 			stmt->is_extended = (BOOL)(buffer2[0] == '+');
 		}
@@ -285,21 +202,6 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 		stmt->has_operand = true;
 		strcpy(stmt->operand, begin);
 	}
-}
-
-static AsmInstruction* getInstruction(Assembler* asmblr, char* str)
-{
-	/* assmebler directive table에서 찾아보고 있으면 반환 */
-	void* inst = hashGetValue(&asmblr->dir_table, str);
-	if (inst != NULL)
-		return (AsmInstruction*)inst;
-
-	/* 없으면 opcode table에서 찾아보고 있으면 반환 */
-	inst = hashGetValue(&asmblr->op_table, str);
-	if (inst != NULL)
-		return (AsmInstruction*)inst;
-
-	return NULL;
 }
 
 static void intfileWrite(Statement* stmt, FILE* stream)

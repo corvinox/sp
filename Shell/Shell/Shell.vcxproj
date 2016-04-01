@@ -148,6 +148,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="20070929.c" />
+    <ClCompile Include="asminstruction.c" />
     <ClCompile Include="asmpass1.c" />
     <ClCompile Include="asmpass2.c" />
     <ClCompile Include="assembler.c" />
@@ -157,6 +158,7 @@
     <ClCompile Include="strutil.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="asminstruction.h" />
     <ClInclude Include="asmpass1.h" />
     <ClInclude Include="asmpass2.h" />
     <ClInclude Include="assembler.h" />

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "strutil.h"
+#include "asminstruction.h"
 #include "asmpass1.h"
 #include "asmpass2.h"
 
@@ -37,6 +38,18 @@ static void registerLoad(Assembler* asmblr);
 
 BOOL assemblerInitialize(Assembler* asmblr)
 {
+	/* assembler 변수 초기화 */
+	asmblr->state = STAT_IDLE;
+	asmblr->error = ERR_NO;
+	asmblr->prog_len = 0;
+	asmblr->start_addr = 0;
+	asmblr->pc_value = 0;
+	asmblr->in_filename[0] = 0;
+	asmblr->int_filename[0] = 0;
+	asmblr->lst_filename[0] = 0;
+	asmblr->obj_filename[0] = 0;
+	asmblr->prog_name[0] = 0;
+
 	/* directive table 초기화 */
 	hashInitialize(&asmblr->dir_table, DIRTAB_BUCKET_SIZE, directiveHashFunc, entryKeyCompare);
 
@@ -84,6 +97,9 @@ void assemblerRelease(Assembler* asmblr)
 
 void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream)
 {
+	/* assembler start 상태로 전환 */
+	asmblr->state = STAT_START;
+
 	char buffer[256];
 	sscanf(filename, "%[^.]", buffer);
 
@@ -95,7 +111,6 @@ void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream
 
 	/* assemble 과정에 사용되는 변수 초기화 */
 	asmblr->start_addr = 0;
-	asmblr->locctr = 0;
 	asmblr->prog_len = 0;
 	sprintf(asmblr->prog_name, "");
 
@@ -103,22 +118,34 @@ void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream
 	hashForeach(&asmblr->sym_table, NULL, entryRelease);
 	hashClear(&asmblr->sym_table);
 
-	fprintf(log_stream, "========================================\n");
-	fprintf(log_stream, "* Assemble Start ***********************\n");
-	
+	fprintf(log_stream, "assemble 시작\n");
+
 	/* 2-pass 알고리즘 */
 	/* pass1에서 에러가 발생하면 pass2는 실행하지 않음 */
-	fprintf(log_stream, "*** First Pass Start *******************\n");
 	BOOL success = assemblePass1(asmblr, log_stream);
-	fprintf(log_stream, "*** First Pass Finish ******************\n");
 	if (success) {
-		fprintf(log_stream, "*** Second Pass Start ******************\n");
-		//assemblePass2(asmblr, log_stream);
-		fprintf(log_stream, "*** Second Pass Finish *****************\n");
+		fprintf(log_stream, "first pass 성공\n");
+		//success = assemblePass2(asmblr, log_stream);
+		//if (success)
+		//	fprintf(log_stream, "second pass 성공\n");
 	}
 
-	fprintf(log_stream, "* Assemble Finish **********************\n");
-	fprintf(log_stream, "========================================\n");
+	/* 파일 정리 */
+	remove(asmblr->int_filename);
+	if (success) {
+		fprintf(log_stream, "assemble 성공\n");
+	}
+	else {
+		remove(asmblr->lst_filename);
+		remove(asmblr->obj_filename);
+		fprintf(log_stream, "assemble 실패\n");
+	}
+
+	/* assembler finish 상태로 전환 */
+	asmblr->state = STAT_FINISH;
+
+	/* assembler idle 상태로 전환 */
+	asmblr->state = STAT_IDLE;
 }
 
 void assemblerPrintOpcode(Assembler* asmblr, char* opcode, FILE* stream)
@@ -313,18 +340,19 @@ static void entryRelease(void* data, void* aux)
 static void directiveLoad(Assembler* asmblr)
 {
 	AsmInstruction inst_initializer[] = {
-		{ "START", INST_START, NULL, execInstStart },
-		{ "END",   INST_END,   NULL, execInstEnd   },
-		{ "BYTE",  INST_BYTE,  NULL, execInstByte  },
-		{ "WORD",  INST_WORD,  NULL, execInstWord  },
-		{ "RESB",  INST_RESB,  NULL, execInstResb  },
-		{ "RESW",  INST_RESW,  NULL, execInstResw  },
-		{ "BASE",  INST_BASE,  NULL, execInstBase  },
+		{ "START", INST_START, 0, NULL, execInstStart },
+		{ "END",   INST_END,   0, NULL, execInstEnd   },
+		{ "BYTE",  INST_BYTE,  0, NULL, execInstByte  },
+		{ "WORD",  INST_WORD,  0, NULL, execInstWord  },
+		{ "RESB",  INST_RESB,  0, NULL, execInstResb  },
+		{ "RESW",  INST_RESW,  0, NULL, execInstResw  },
+		{ "BASE",  INST_BASE,  0, NULL, execInstBase  },
 	};
 
 	for (int i = 0; i < 7; i++) {
 		AsmInstruction* inst = (AsmInstruction*)malloc(sizeof(AsmInstruction));
 		inst->mnemonic = strdup(inst_initializer[i].mnemonic); 
+		inst->type = inst_initializer[i].type;
 		inst->value = inst_initializer[i].value;
 		inst->aux = inst_initializer[i].aux;
 		inst->exec_func = inst_initializer[i].exec_func;
@@ -393,6 +421,7 @@ static void opcodeLoad(Assembler* asmblr)
 
 		AsmInstruction* inst = (AsmInstruction*)malloc(sizeof(AsmInstruction));
 		inst->mnemonic = strdup(mnemonic);
+		inst->type = INST_OPCODE;
 		inst->value = code;
 		inst->aux = (void*)format;
 		inst->exec_func = execInstOpcode;
@@ -422,10 +451,9 @@ static void registerLoad(Assembler* asmblr)
 	};
 
 	for (int i = 0; i < 9; i++) {
-		AsmRegister* reg = (AsmRegister*)calloc(1, sizeof(AsmRegister*));
+		AsmRegister* reg = (AsmRegister*)calloc(1, sizeof(AsmRegister));
 		reg->mnemonic = strdup(reg_initializer[i].mnemonic);
 		reg->number= reg_initializer[i].number;
-
 		hashInsert(&asmblr->reg_table, reg->mnemonic, reg);
 	}
 }

@@ -13,6 +13,15 @@
 
 typedef void (*ExecFuncPtr)(struct _Assembler*, struct _Statement*, FILE*);
 
+typedef enum _AsmState
+{
+	STAT_IDLE,
+	STAT_START,
+	STAT_RUN_PASS1,
+	STAT_RUN_PASS2,
+	STAT_FINISH
+} AsmState;
+
 typedef enum _AsmErrorCode
 {
 	ERR_NO,
@@ -22,7 +31,7 @@ typedef enum _AsmErrorCode
 	ERR_INVALID_OPCODE,
 } AsmErrorCode;
 
-typedef enum _AsmInstCode
+typedef enum _AsmInstType
 {
 	INST_NO,
 	INST_START,
@@ -33,22 +42,27 @@ typedef enum _AsmInstCode
 	INST_RESW,
 	INST_BASE,
 	INST_OPCODE
-} AsmInstCode;
+} AsmInstType;
 
-typedef enum _AddrMode
+typedef enum _AddressMode
 {
-	ADDR_SIMPLE = 0,
+	ADDR_SIMPLE,
 	ADDR_IMMEDIATE,
-	ADDR_INDIRECT
-} AddrMode;
+	ADDR_INDIRECT,
+
+	ADDR_DIRECT,
+	ADDR_PC_REL,
+	ADDR_BASE_REL
+} AddressMode;
 
 typedef struct _Statement
 {
 	int line_number;
 	int loc;
+	int inst_len;
 	int inst_code;
 	int addr_mode;
-	int error;
+	BOOL error;
 	BOOL is_invalid;
 	BOOL is_empty;
 	BOOL is_extended;
@@ -79,6 +93,7 @@ typedef struct _Register
 typedef struct _AsmInstruction
 {
 	char* mnemonic;
+	int type;
 	int value;
 	void* aux;
 	ExecFuncPtr exec_func;
@@ -86,10 +101,12 @@ typedef struct _AsmInstruction
 
 typedef struct _Assembler
 {
+	int state;
 	int error;
 	int prog_len;
 	int start_addr;
-	int locctr;
+	int pc_value;
+	int base_value;
 
 	HashTable dir_table;
 	HashTable op_table;

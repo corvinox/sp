@@ -12,7 +12,5 @@ extern char* strTrim(char* begin, char* end);
 extern void strTrimCopy(char* dst, char* begin, char* end);
 extern void strParse(char* str, char** begin, char** end);
 extern int strToInt(char* str, int radix, BOOL* error);
-extern BOOL isHexadecimalStr(char* str);
-extern BOOL isDecimalStr(char* str);
 
 #endif

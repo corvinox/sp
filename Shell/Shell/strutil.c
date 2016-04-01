@@ -81,24 +81,3 @@ int strToInt(char* str, int radix, BOOL* error) {
 		*error = (BOOL)(end_ptr - str < len);
 	return value;
 }
-
-
-BOOL isHexadecimalStr(char* str)
-{
-	char* ptr = str;
-	for (; *ptr != 0; ptr++) {
-		if (!isxdigit(*ptr))
-			return false;
-	}
-	return true;
-}
-
-BOOL isDecimalStr(char* str)
-{
-	char* ptr = str;
-	for (; *ptr != 0; ptr++) {
-		if (!isdigit(*ptr))
-			return false;
-	}
-	return true;
-}
