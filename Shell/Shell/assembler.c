@@ -41,8 +41,8 @@ BOOL assemblerInitialize(Assembler* asmblr)
 	/* assembler 변수 초기화 */
 	asmblr->state = STAT_IDLE;
 	asmblr->error = ERR_NO;
-	asmblr->prog_len = 0;
-	asmblr->start_addr = 0;
+	asmblr->prog_addr = 0; 
+	asmblr->prog_len = 0;	
 	asmblr->pc_value = 0;
 	asmblr->in_filename[0] = 0;
 	asmblr->int_filename[0] = 0;
@@ -110,7 +110,7 @@ void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream
 	sprintf(asmblr->obj_filename, "%s.obj", buffer);
 
 	/* assemble 과정에 사용되는 변수 초기화 */
-	asmblr->start_addr = 0;
+	asmblr->prog_addr = 0;
 	asmblr->prog_len = 0;
 	sprintf(asmblr->prog_name, "");
 
@@ -122,16 +122,18 @@ void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream
 
 	/* 2-pass 알고리즘 */
 	/* pass1에서 에러가 발생하면 pass2는 실행하지 않음 */
+	fprintf(log_stream, "first pass 시작\n");
 	BOOL success = assemblePass1(asmblr, log_stream);
 	if (success) {
 		fprintf(log_stream, "first pass 성공\n");
-		//success = assemblePass2(asmblr, log_stream);
-		//if (success)
-		//	fprintf(log_stream, "second pass 성공\n");
+		fprintf(log_stream, "second pass 시작\n");
+		success = assemblePass2(asmblr, log_stream);
+		if (success)
+			fprintf(log_stream, "second pass 성공\n");
 	}
 
-	/* 파일 정리 */
-	remove(asmblr->int_filename);
+	/* 2-pass 알고리즘에 사용된 파일 정리 */
+	//remove(asmblr->int_filename);
 	if (success) {
 		fprintf(log_stream, "assemble 성공\n");
 	}

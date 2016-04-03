@@ -28,7 +28,7 @@ char* strTrimFront(char* begin)
 char* strTrim(char* begin, char* end)
 {
 	if (begin >= end)
-		return NULL;
+		return begin;
 
 	char* ptr;
 	for (ptr = end - 1; isspace(*ptr) && begin < ptr; ptr--)

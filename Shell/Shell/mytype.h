@@ -10,6 +10,8 @@
 #endif
 
 typedef unsigned char BOOL;
+typedef unsigned char BYTE;
+typedef unsigned int WORD;
 typedef char* STRING;
 
 

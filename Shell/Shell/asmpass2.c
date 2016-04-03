@@ -13,22 +13,24 @@
 #define BUFFER_LEN 1024
 
 /* Listing file formatting에 필요한 값을 정의 */
+#define LST_GAP_LEN         4
 #define LST_LINE_NUMBER_LEN 5
 #define LST_LABEL_LEN       6
 #define LST_INSTRUCTION_LEN 6
 #define LST_OPERAND_LEN     (OBJ_LEN_MAX + 3)
 
+
 #define TEXT_OBJ_LEN 60
 
-#define MASK_12BITS 0x00000111
-#define MASK_24BITS 0x00111111
-
-
-#define OBJ_LEN_MAX 60
-
+#define MASK_1BIT   0x00000001
+#define MASK_4BITS  0x0000000F
+#define MASK_12BITS 0x00000FFF
+#define MASK_16BITS 0x0000FFFF
+#define MASK_20BITS 0x000FFFFF
+#define MASK_24BITS 0x00FFFFFF
 
 static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream);
-static void lstfileWrite(Statement* stmt, FILE* stream);
+static void lstfileWrite(Statement* stmt, char* obj_code, FILE* stream);
 static void headerRecordWrite(HeaderRecord* record, FILE* stream);
 static void textRecordWrite(TextRecord* record, FILE* stream);
 static void modificationRecordWrite(EndRecord* record, FILE* stream);
@@ -64,6 +66,10 @@ BOOL assemblePass2(Assembler* asmblr, FILE* log_stream)
 	EndRecord e_record = { 0, };
 
 	BOOL pass_error = false;
+	char buffer[BUFFER_LEN] = { 0, };
+
+	/* assembler 변수 초기화 */
+	asmblr->pc_value = 0;
 
 	statementParse(asmblr, &stmt, fp_int);
 	if (stmt.is_invalid || stmt.instruction == NULL) {
@@ -71,27 +77,45 @@ BOOL assemblePass2(Assembler* asmblr, FILE* log_stream)
 	}
 	else if (stmt.instruction->type == INST_START) {
 		strcpy(h_record.prog_name, stmt.label);
-		lstfileWrite(&stmt, fp_lst);
+		lstfileWrite(&stmt, "", fp_lst);
 		statementParse(asmblr, &stmt, fp_int);
 	}
 
 	/* write header record */
+	h_record.prog_addr = asmblr->prog_addr;
+	h_record.prog_len = asmblr->prog_len;
+	strcpy(h_record.prog_name, asmblr->prog_name);
 	headerRecordWrite(&h_record, fp_obj);
+
 	/* init first text record */
+	t_record.obj_addr = asmblr->prog_addr;
 
-
-	while (stmt.instruction != NULL && stmt.instruction->type == INST_END) {
+	while (!feof(fp_int)) {
 		if (stmt.is_invalid) {
+			/* error */
+			stmt.error = true;
+			fprintf(log_stream, "LINE %d: 유효하지 않은 STATEMENT 입니다.\n", stmt.line_number);
 		}
 		else if (stmt.is_empty) {
 		}
 		else if (!stmt.is_comment) {
 			char obj_code[OBJ_LEN_MAX + 1] = { 0, };
-			int operand = 0;
 
-			//asmblr->pc_value += stmt.
+			asmblr->pc_value += stmt.inst_len;
 			
-			if (stmt.instruction->type == INST_OPCODE) {
+			if (stmt.instruction->type == INST_END) {
+
+				/* object code 파일에 마지막 text record 쓰기 */
+				textRecordWrite(&t_record, fp_obj);
+
+				/* object code 파일에 end record 쓰기 */
+				endRecordWrite(&e_record, fp_obj);
+
+				// write last lst line
+				lstfileWrite(&stmt, "", fp_lst);
+				break;
+			}
+			else if (stmt.instruction->type == INST_OPCODE) {
 				int opcode_format = (int)stmt.instruction->aux;
 				if (opcode_format != 1 && !stmt.has_operand) {
 					/* error */
@@ -103,22 +127,75 @@ BOOL assemblePass2(Assembler* asmblr, FILE* log_stream)
 					stmt.error = true;
 					fprintf(log_stream, "LINE %d: INSTRUCTION (%s) FORMAT4로 사용 할 수 없습니다.\n", stmt.line_number, stmt.instruction->mnemonic);
 				}
-				else if (opcode_format == 2) {
-
+				/* opcode instruction의 format이 1 인 경우 */
+				else if (opcode_format == 1) {
+					sprintf(obj_code, "%8X", (BYTE)stmt.instruction->value);
 				}
+				/* opcode instruction의 format이 2 인 경우 */
+				else if (opcode_format == 2) {
+					AsmRegister* reg;
+					int r0 = 0;
+					int r1 = 0;
+
+					strcpy(buffer, stmt.operand);
+					char* ctx;
+					char* ptr = strtok_s(buffer, ",", &ctx);
+					if (ptr == NULL) {
+						/* error */
+						stmt.error = true;
+						fprintf(log_stream, "LINE %d: INSTRUCTION (%s) 는 OPERAND가 필요합니다.\n", stmt.line_number, stmt.instruction->mnemonic);
+					}
+					else {
+						ptr = strTrim(ptr, ctx - 1);
+						reg = (AsmRegister*)hashGetValue(&asmblr->reg_table, ptr);
+						if (reg == NULL) {
+							/* error */
+							stmt.error = true;
+							fprintf(log_stream, "LINE %d: 해당 이름의 REGISTER (%s) 를 찾을 수 없습니다.\n", stmt.line_number, ptr);
+						}
+						else {
+							r0 = reg->number;
+							
+							ptr = strtok_s(ctx, ",", &ctx);
+							if (ptr != NULL) {
+								ptr = strTrim(ptr, ctx - 1);
+								if (strlen(ptr) > 0) {
+									reg = (AsmRegister*)hashGetValue(&asmblr->reg_table, ptr);
+									if (reg == NULL) {
+										/* error */
+										stmt.error = true;
+										fprintf(log_stream, "LINE %d: 해당 이름의 REGISTER (%s) 를 찾을 수 없습니다.\n", stmt.line_number, ptr);
+									}
+									else {
+										r1 = reg->number;
+									}
+								}
+							}
+
+							WORD obj_value = (BYTE)stmt.instruction->value;
+							obj_value = (obj_value << 4) + (MASK_4BITS & r0);
+							obj_value = (obj_value << 4) + (MASK_4BITS & r1);
+							sprintf(obj_code, "%024X", MASK_16BITS & obj_value);
+						}
+					}
+				}
+				/* opcode instruction의 format이 3/4 인 경우 */
 				else if (opcode_format == 3) {
-					char buffer[BUFFER_LEN] = { 0, };
 					char* begin = stmt.operand;
-					char* end;
-					int bit_n = 0, bit_i = 0;
-					int bit_b = 0, bit_p = 0;
-					int bit_x = 0, bit_e = 0;
+
+					BYTE bit_n = 1, bit_i = 1;
+					BYTE bit_b = 0, bit_p = 0;
+					BYTE bit_x = 0, bit_e = 0;
 					int addr = 0;
 
+					/* indirect mode 인지 검사 */
 					if (*begin == '@') {
+						bit_i = 0;
 						begin++;
 					}
+					/* immediate mode 인지 검사 */
 					else if (*begin == '#') {
+						bit_n = 0;
 						begin++;
 					}
 
@@ -127,152 +204,156 @@ BOOL assemblePass2(Assembler* asmblr, FILE* log_stream)
 					char* ptr = strtok_s(begin, ",", &ctx);
 					
 					if (ptr == NULL) {
+						/* error */
 						stmt.error = true;
+						fprintf(log_stream, "LINE %d: INSTRUCTION (%s) 는 OPERAND가 필요합니다.\n", stmt.line_number, stmt.instruction->mnemonic);
 					}
 					else {
-						ptr = strTrim(ptr, ctx);
+						ptr = strTrim(ptr, ctx - 1);
 
 						int* value = (int*)hashGetValue(&asmblr->sym_table, ptr);
 						if (value == NULL) {
-							stmt.error = true;
-							fprintf(log_stream, "LINE %d: SYMBOL (%s)이 정의되지 않았습니다.\n", stmt.line_number, stmt.operand);
-						}
-
-						/* 해당 symbol에 대한 주소값 저장 */
-						addr = *value;
-						if ((ptr = strtok_s(ctx, ",", &ctx)) != NULL) {
-							ptr = strTrim(ptr, ctx);
-							if (strcmp(ptr, "X")) {
+							BOOL error;
+							addr = strToInt(ptr, 10, &error);
+							if (error) {
 								/* error */
 								stmt.error = true;
-								fprintf(log_stream, "LINE %d: 잘못된 문법입니다.\n", stmt.line_number);
+								fprintf(log_stream, "LINE %d: OPERAND (%s)는 유효하지 않습니다.\n", stmt.line_number, stmt.operand);
 							}
-							else {
-								/* indexed addressing 모드 */
-								bit_x = 1;
-							}
-						}
-
-						if (stmt.is_extended) {
-							bit_e = 1;
 						}
 						else {
-							/* pc relative */
-							int disp = addr - stmt.loc - 3;
-							if (disp >= -2048 && disp <= 2047) {
+							/* 해당 symbol에 대한 주소값 저장 */
+							addr = *value;
+							if ((ptr = strtok_s(ctx, ",", &ctx)) != NULL) {
+								ptr = strTrim(ptr, ctx);
+								if (strcmp(ptr, "X")) {
+									/* error */
+									stmt.error = true;
+									fprintf(log_stream, "LINE %d: 잘못된 문법입니다.\n", stmt.line_number);
+								}
+								else {
+									/* indexed addressing 모드 */
+									bit_x = 1;
+								}
+							}
+
+							/* format 4 사용을 명시한 경우 */
+							if (stmt.is_extended) {
+								bit_e = 1;
+
+								WORD obj_value = (BYTE)stmt.instruction->value;
+								obj_value += (bit_n << 1) + bit_i;
+								obj_value = (obj_value << 1) + MASK_1BIT & bit_x;
+								obj_value <<= 1, // bit_b = 0
+									obj_value <<= 1; // bit_p = 0;
+								obj_value = (obj_value << 1) + 1;
+								obj_value = (obj_value << 12) + MASK_20BITS & addr;
+								sprintf(obj_code, "%032X", obj_value);
+							}
+							/* format 3인 경우 */
+							else {
+								/* pc relative 시도 */
+								int disp = addr - asmblr->pc_value;
+								if (disp >= -2048 && disp <= 2047) {
+									bit_p = 1;
+								}
+								/* pc relative가 안되면 base relative 시도 */
+								else {
+									disp = addr - asmblr->base_value;
+									if (disp >= 0 && disp <= 4095) {
+										bit_b = 1;
+									}
+									/* base relatvie로도 주소 계산이 불가능하면 에러 */
+									/* pc, base  둘다 불가능하여 format 4를 사용해야하는데 */
+									/* format 4를 사용을 명시하는 prefix '+'를 사용하지 않았기 때문에 에러 */
+									else {
+										stmt.error = true;
+										fprintf(log_stream, "LINE %d: FORMAT 4 사용이 명시되어있지 않습니다. \n", stmt.line_number);
+									}
+								}
+
+								/* assemble the object code instruction */
+								WORD obj_value = (BYTE)stmt.instruction->value;
+								obj_value += (bit_n << 1) + bit_i;
+								obj_value = (obj_value << 1) + (MASK_1BIT & bit_x);
+								obj_value = (obj_value << 1) + (MASK_1BIT & bit_b);
+								obj_value = (obj_value << 1) + (MASK_1BIT & bit_p);
+								obj_value <<= 1; // bit_e = 0
+								obj_value = (obj_value << 12) + (MASK_12BITS & disp);
+								sprintf(obj_code, "%024X", MASK_24BITS & obj_value);
 							}
 						}
 					}
 				}
-				if (stmt.has_operand) {
-					void* sym_value = hashGetValue(&asmblr->sym_table, stmt.operand);
-					if (sym_value != NULL) {
-						/* 해당 심볼에 대한 location counter 값 저장 */
-						operand = *(int*)sym_value;
+			} //
+			else if (!strcmp(stmt.instruction->mnemonic, "BYTE")) {
+				int len = strlen(stmt.operand);
+
+				if (stmt.operand[1] == '\'' && stmt.operand[len - 1] == '\'') {
+					if (stmt.operand[0] == 'C') {
+						stmt.inst_len = len - 3;
+					}
+					else if (stmt.operand[0] == 'X') {
+						stmt.inst_len = (len - 2) / 2;
 					}
 					else {
 						/* error */
 						stmt.error = true;
-						fprintf(log_stream, "LINE %d: SYMBOL (%s)이 정의되지 않았습니다.\n", stmt.line_number, stmt.operand);
-					}
-				}
-
-				/* TA addressing mode 설정*/
-				int pc = stmt.loc + (stmt.is_extended ? 4 : 3);
-				int ni;
-				int x = (stmt.is_indexed ? 1 : 0);
-				int b = 0;
-				int p = 0;
-				int e = 0;
-				/* how to interpret */
-				if (stmt.addr_mode == ADDR_SIMPLE)
-					ni = 0x11;
-				else if (stmt.addr_mode == ADDR_INDIRECT)
-					ni = 0x10;
-				else if (stmt.addr_mode == ADDR_IMMEDIATE)
-					ni = 0x01;
-
-				/* how to caculate */
-				int disp = operand - pc;
-				if (disp >= -2048 && disp <= 2047) {
-					/* PC relative로 계산 */
-					/* 음수인 경우 12BIT만 사용하기 위해서 MASKING */
-					p = 1;
-					disp &= MASK_12BITS;
-				}
-				else {
-					/* PC relative로 불가능하면 Base relative로 계산 */
-					disp = operand - asmblr->pc_value;
-
-					if (disp >= 0 && disp <= 4095) {
-						b = 1;
-					}
-					else {
-						/* Base relatvie로 불가능하면 format 4 사용 */
-						e = 1;
-						disp = operand;
-					}
-				}
-
-				// assemble the object code instruction
-				//sprintf(obj_code, "%8X%X%X%X%X%*X", *(int*)opcode + ni, x, b, p, e, (e ? 15 : 12), disp);
-			}
-			else if (!strcmp(stmt.instruction->mnemonic, "BYTE")) {
-				int len = strlen(stmt.operand);
-
-				if (stmt.instruction->mnemonic[0] == '\'' && stmt.operand[len - 1] == '\'') {
-					if (stmt.operand[0] == 'C')
-						asmblr->pc_value += len - 3;
-					else if (stmt.operand[0] == 'X') {
-						if (len & 1) {
-							char* endPtr;
-							int value = strtol(stmt.operand + 2, &endPtr, 16);
-							//if (endPtr - stmt.operand == len - 1)
-						}
-						else {
-							// error
-						}
-					}
-					else {
-						// error
+						fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 					}
 				}
 				else {
-					// error
+					/* error */
+					stmt.error = true;
+					fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 				}
 			}
 			else if (!strcmp(stmt.instruction->mnemonic, "WORD")) {
 				// convert constant to object code	
-				char* endPtr;
-				int value = strtol(stmt.operand, &endPtr, 10);
-				if (endPtr - stmt.operand == strlen(stmt.operand)) {
-					sprintf(obj_code, "%*X", 6, MASK_24BITS & value);
+				BOOL error;
+				int value = strToInt(stmt.operand, 10, &error);
+				if (error) {
+					/* error */
+					stmt.error = true;
+					fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt.line_number, stmt.operand);
 				}
 				else {
-					// error
+					sprintf(obj_code, "%6X", MASK_24BITS & value);
 				}
 			}
 
-			/* object code will not fit into the current Text record */
-			//if (1) {
-				// write text record to objectprogram
-				//textRecordWrite(, text_obj, fp_obj);
-				// initialize new text record
-				//memset(text_obj, 0, TEXT_OBJ_LEN);
-			//}
-			// add object code to Text record
-		}
-		// write lst line
-		lstfileWrite(&stmt, fp_lst);
-		//statementParse(&stmt, buffer, BUFFER_LEN, fp_int);
-	}
+			int obj_code_len = strlen(obj_code);
+			if (obj_code_len & 1) {
+				/* error */
+				stmt.error = true;
+				fprintf(log_stream, "LINE %d: 유효하지 않은 OBJECT CODE가 생성되었습니다.\n", stmt.line_number);
+			}
 
-	// write last Text record to object program
-	//textRecordWrite(, text_obj, fp_obj);
-	// write End record to object program
-	//endRecordWrite(, fp_obj);
-	// write last lst line
-	lstfileWrite(&stmt, fp_lst);
+			if (!stmt.error) {
+				/* object code will not fit into the current Text record */
+				int cal_len = t_record.obj_len + (obj_code_len / 2);
+				if (cal_len >= 30) {
+					t_record.obj_len = cal_len; 
+					strcat(t_record.obj_code, obj_code);
+
+					/* object code 파일에 text record 쓰기 */
+					textRecordWrite(&t_record, fp_obj);
+
+					t_record.obj_addr = asmblr->pc_value;
+					t_record.obj_len = 0;
+					t_record.obj_code[0] = 0;
+				}
+
+				/* listing 파일에 쓰기 */
+				lstfileWrite(&stmt, obj_code, fp_lst);
+			}
+			
+		} // 
+		
+		/* statement 초기화 */
+		memset(&stmt, 0, sizeof(Statement));
+		statementParse(asmblr, &stmt, fp_int);
+	}
 
 	fclose(fp_int);
 	fclose(fp_lst);
@@ -291,15 +372,16 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 	/* 1. line number, location counter */
 	if (fgets(buffer, BUFFER_LEN, stream) == NULL) {
 		/* 파일의 끝이면 현재 statement가 빈 문자열인 것으로 설정 */
+		stmt->is_empty = true;
 		return;
 	}
 	else {
-		sscanf(buffer, "%d %d", &stmt->line_number, &stmt->loc);
+		sscanf(buffer, "%d %d %d", &stmt->line_number, &stmt->loc, &stmt->inst_len);
 	}
 	
 	/* 2. label */
 	if (fgets(buffer, BUFFER_LEN, stream) == NULL) {
-		/* 파일의 끝이면 현재 statement가 빈 문자열인 것으로 설정 */
+		/* error */
 		stmt->is_invalid = true;
 		return;
 	}
@@ -313,12 +395,17 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 	
 	/* 3. instruction */
 	if (fgets(buffer, BUFFER_LEN, stream) == NULL) {
-		/* 파일의 끝이면 현재 statement가 빈 문자열인 것으로 설정 */
+		/* error */
 		stmt->is_invalid = true;
 		return;
 	}
 	else {
 		ptr = strTrim(buffer, buffer + strlen(buffer));
+		if (*ptr == '+') {
+			stmt->is_extended = true;
+			ptr++;
+		}
+
 		stmt->instruction = getInstruction(asmblr, ptr);
 		if (stmt->instruction == NULL) {
 			/* error */
@@ -329,7 +416,7 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 
 	/* 4. operand */
 	if (fgets(buffer, BUFFER_LEN, stream) == NULL) {
-		/* 파일의 끝이면 현재 statement가 빈 문자열인 것으로 설정 */
+		/* error */
 		stmt->is_invalid = true;
 		return;
 	}
@@ -342,24 +429,50 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 	}
 }
 
-static void lstfileWrite(Statement* stmt, FILE* stream)
+static void lstfileWrite(Statement* stmt, char* obj_code, FILE* stream)
 {
-	if (!stmt->is_comment) {
-		fprintf(stream, "%*d    ", LST_LINE_NUMBER_LEN, stmt->line_number);
-		fprintf(stream, "%5d    ", stmt->loc);
-		fprintf(stream, "%-*s   ", LST_LABEL_LEN, (stmt->has_label ? stmt->label : ""));
-		fprintf(stream, "%c", stmt->is_extended ? '+' : ' ');
-		fprintf(stream, "%-*s   ", LST_INSTRUCTION_LEN, stmt->instruction->mnemonic);
-		if (stmt->addr_mode == ADDR_IMMEDIATE)
-			fprintf(stream, "#");
-		else if (stmt->addr_mode == ADDR_INDIRECT)
-			fprintf(stream, "@");
-		else
-			fprintf(stream, " ");
-		fprintf(stream, "%-*s    ", LST_OPERAND_LEN, (stmt->has_operand ? stmt->operand : ""));
-		//fprintf(stream, "")
-		fprintf(stream, "\n");
-	}
+	char buffer[BUFFER_LEN + 1] = { 0, };
+	char* ptr = buffer;
+
+	sprintf(ptr, "%*d", LST_LINE_NUMBER_LEN, stmt->line_number);
+	ptr += LST_LINE_NUMBER_LEN;
+	for (int i = 0; i < LST_GAP_LEN; i++)
+		sprintf(ptr++, " ");
+
+	sprintf(ptr, "%5d", stmt->loc);
+	ptr += 5;
+	for (int i = 0; i < LST_GAP_LEN; i++)
+		sprintf(ptr++, " ");
+
+	sprintf(ptr, "%-*s", LST_LABEL_LEN, (stmt->has_label ? stmt->label : ""));
+	ptr += LST_LABEL_LEN;
+	for (int i = 0; i < LST_GAP_LEN; i++)
+		sprintf(ptr++, " ");
+
+	sprintf(ptr, "%c", stmt->is_extended ? '+' : ' ');
+	ptr += 1;
+
+	sprintf(ptr, "%-*s", LST_INSTRUCTION_LEN, stmt->instruction->mnemonic);
+	ptr += LST_INSTRUCTION_LEN;
+	for (int i = 0; i < LST_GAP_LEN; i++)
+		sprintf(ptr++, " ");
+
+	if (stmt->addr_mode == ADDR_IMMEDIATE)
+		sprintf(ptr, "#");
+	else if (stmt->addr_mode == ADDR_INDIRECT)
+		sprintf(ptr, "@");
+	else
+		sprintf(ptr, " ");
+	ptr += 1;
+
+	sprintf(ptr, "%-*s", LST_OPERAND_LEN, (stmt->has_operand ? stmt->operand : ""));
+	ptr += LST_OPERAND_LEN;
+	for (int i = 0; i < LST_GAP_LEN; i++)
+		sprintf(ptr++, " ");
+
+	sprintf(ptr, "%s\n", obj_code);
+
+	fprintf(stream, "%s", buffer);
 }
 
 static void headerRecordWrite(HeaderRecord* record, FILE* stream)
@@ -369,7 +482,7 @@ static void headerRecordWrite(HeaderRecord* record, FILE* stream)
 
 static void textRecordWrite(TextRecord* record, FILE* stream)
 {
-	fprintf(stream, "T%6X%2X%s\n", record->obj_addr, record->obj_len, record->obj_code);
+	fprintf(stream, "T%06X%02X%s\n", record->obj_addr, record->obj_len, record->obj_code);
 }
 
 static void modificationRecordWrite(EndRecord* record, FILE* stream)
@@ -379,5 +492,5 @@ static void modificationRecordWrite(EndRecord* record, FILE* stream)
 
 static void endRecordWrite(EndRecord* record, FILE* stream)
 {
-	fprintf(stream, "E%6X", record->executable);
+	fprintf(stream, "E%06X", record->executable);
 }

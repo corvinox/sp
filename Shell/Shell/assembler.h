@@ -5,11 +5,11 @@
 #include "mytype.h"
 #include "hash.h"
 
-#define COMMENT_LEN     1024
-#define LABEL_LEN_MAX   8
-#define INSTRUCTION_LEN 8
-#define OPERAND_LEN     128
-#define FILENAME_LEN_MAX 16
+#define LABEL_LEN_MAX    8
+#define OPERAND_LEN_MAX  128
+#define FILENAME_LEN_MAX 256
+
+#define OBJ_LEN_MAX 60
 
 typedef void (*ExecFuncPtr)(struct _Assembler*, struct _Statement*, FILE*);
 
@@ -72,17 +72,10 @@ typedef struct _Statement
 	BOOL has_operand;
 
 	struct _AsmInstruction* instruction;
-	char label[LABEL_LEN_MAX];
-	char operand[OPERAND_LEN];
+	char label[LABEL_LEN_MAX + 1];
+	char operand[OPERAND_LEN_MAX + 1];
+	char obj_code[OBJ_LEN_MAX + 1];
 } Statement;
-
-typedef struct _IntStatement
-{
-	int line_number;
-	int loc;
-	int inst;
-	int addr_mode;
-} IntStatement;
 
 typedef struct _Register
 {
@@ -103,8 +96,8 @@ typedef struct _Assembler
 {
 	int state;
 	int error;
+	int prog_addr; 
 	int prog_len;
-	int start_addr;
 	int pc_value;
 	int base_value;
 
@@ -113,11 +106,11 @@ typedef struct _Assembler
 	HashTable reg_table;
 	HashTable sym_table;
 
-	char in_filename[FILENAME_LEN_MAX];
-	char int_filename[FILENAME_LEN_MAX];
-	char lst_filename[FILENAME_LEN_MAX];
-	char obj_filename[FILENAME_LEN_MAX];
-	char prog_name[LABEL_LEN_MAX];
+	char in_filename[FILENAME_LEN_MAX + 1];
+	char int_filename[FILENAME_LEN_MAX + 1];
+	char lst_filename[FILENAME_LEN_MAX + 1];
+	char obj_filename[FILENAME_LEN_MAX + 1];
+	char prog_name[LABEL_LEN_MAX + 1];
 } Assembler;
 
 extern BOOL assemblerInitialize(Assembler* asmblr);

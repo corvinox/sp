@@ -52,7 +52,7 @@ void execInstStart(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 		}
 
 		asmblr->pc_value = start_addr;
-		asmblr->start_addr = start_addr;
+		asmblr->prog_addr = start_addr;
 	}
 	/* PASS2 일 때 기능 */
 	else if (asmblr->state == STAT_RUN_PASS2) {
@@ -65,7 +65,7 @@ void execInstEnd(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 	/* PASS1 일 때 기능 */
 	if (asmblr->state == STAT_RUN_PASS1) {
 		/* program의 길이 계산 */
-		asmblr->prog_len = asmblr->pc_value - asmblr->start_addr;
+		asmblr->prog_len = asmblr->pc_value - asmblr->prog_addr;
 	}
 	/* PASS2 일 때 기능 */
 	else if (asmblr->state == STAT_RUN_PASS2) {
@@ -81,9 +81,9 @@ void execInstByte(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 
 		if (stmt->operand[1] == '\'' && stmt->operand[len - 1] == '\'') {
 			if (stmt->operand[0] == 'C')
-				asmblr->pc_value += len - 3;
+				stmt->inst_len = len - 3;
 			else if (stmt->operand[0] == 'X')
-				asmblr->pc_value += (len - 2) / 2;
+				stmt->inst_len = (len - 2) / 2;
 			else {
 				/* error */
 				stmt->error = true;
@@ -106,7 +106,7 @@ void execInstWord(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 {
 	/* PASS1 일 때 기능 */
 	if (asmblr->state == STAT_RUN_PASS1) {
-		asmblr->pc_value += 3;
+		stmt->inst_len = 3;
 	}
 	/* PASS2 일 때 기능 */
 	else if (asmblr->state == STAT_RUN_PASS2) {
@@ -125,7 +125,7 @@ void execInstResb(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 			stmt->error = true; 
 			fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
 		}
-		asmblr->pc_value += operand;
+		stmt->inst_len = operand;
 	}
 	/* PASS2 일 때 기능 */
 	else if (asmblr->state == STAT_RUN_PASS2) {
@@ -144,7 +144,7 @@ void execInstResw(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 			stmt->error = true;
 			fprintf(log_stream, "LINE %d: 잘못된 OPERAND 오류 (%s)\n", stmt->line_number, stmt->operand);
 		}
-		asmblr->pc_value += 3 * operand;
+		stmt->inst_len = 3 * operand;
 	}
 	/* PASS2 일 때 기능 */
 	else if (asmblr->state == STAT_RUN_PASS2) {
@@ -174,7 +174,7 @@ void execInstOpcode(Assembler* asmblr, Statement* stmt, FILE* log_stream)
 {
 	/* PASS1 일 때 기능 */
 	if (asmblr->state == STAT_RUN_PASS1) {
-		asmblr->pc_value += (stmt->is_extended ? 4 : (int)stmt->instruction->aux);
+		stmt->inst_len = (stmt->is_extended ? 4 : (int)stmt->instruction->aux);
 	}
 	/* PASS2 일 때 기능 */
 	else if (asmblr->state == STAT_RUN_PASS2) {

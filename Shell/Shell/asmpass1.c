@@ -40,21 +40,24 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 	BOOL pass_end = false;
 
 	/* 라인 넘버 초기화 */
-	stmt.line_number = 0;
+	int line_number = 0;
 
 	while (!feof(fp_asm)){// && stmt.inst_code != INST_END) {
 		/* statement 초기화 */
-		stmt.loc = asmblr->pc_value;
-		stmt.error = false;
-		stmt.is_comment = false;
-		stmt.is_empty = false;
-		stmt.is_extended = false;
-		stmt.is_indexed = false;
-		stmt.is_invalid = false;
-		stmt.has_label = false;
-		stmt.instruction = NULL;
-		stmt.label[0] = 0;
-		stmt.operand[0] = 0;
+		//stmt.loc = 0;
+		//stmt.inst_len = 0;
+		//stmt.error = false;
+		//stmt.is_comment = false;
+		//stmt.is_empty = false;
+		//stmt.is_extended = false;
+		//stmt.is_indexed = false;
+		//stmt.is_invalid = false;
+		//stmt.has_label = false;
+		//stmt.instruction = NULL;
+		//stmt.label[0] = 0;
+		//stmt.operand[0] = 0;
+		//stmt.obj_code[0] = 0;
+		memset(&stmt, 0, sizeof(Statement));
 
 		/* asm 파일에서 읽기 */
 		statementParse(asmblr, &stmt, fp_asm);
@@ -71,9 +74,14 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 			break;
 		}
 
-		/* 주석이나 빈 라인이 아니라면 라인 증가*/
-		stmt.line_number += 5;
+		/* 유효한 statement 일 경우 fetch */
+		/*  */
+		line_number += 5;
+		stmt.line_number = line_number;
 
+		/* 현재 statement의 location 값 지정 */
+		stmt.loc = asmblr->pc_value;
+		
 		/* label에 대한 처리 */
 		if (stmt.has_label) {
 			if (!isalpha(stmt.label[0])) {
@@ -118,12 +126,16 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 			if (!strcmp(stmt.instruction->mnemonic, "END"))
 				pass_end = true;
 		}
-		
+
+		/* instruction의 길이 만큼 pc값 증가 */
+		asmblr->pc_value += stmt.inst_len;
+				
 		if (stmt.error) {
 			/* statement에 에러가 발생했으면, pass_error를 true로 설정 */
 			pass_error = true;
 		}
-		if (!stmt.error) {
+
+		if (!pass_error) {
 			/* statement에 에러가 없다면 중간 파일에 씀 */
 			intfileWrite(&stmt, fp_int);
 		}
@@ -131,7 +143,7 @@ BOOL assemblePass1(Assembler* asmblr, FILE* log_stream)
 
 	/* End 문이 없음 */
 	if (!pass_end) {
-		fprintf(log_stream, "LINE %d: END STATEMENT가 존재하지 않습니다.\n", stmt.line_number);
+		fprintf(log_stream, "파일의 끝: END STATEMENT가 존재하지 않습니다.\n");
 		pass_error = true;
 	}
 
@@ -206,7 +218,7 @@ static void statementParse(Assembler* asmblr, Statement* stmt, FILE* stream)
 
 static void intfileWrite(Statement* stmt, FILE* stream)
 {
-	fprintf(stream, "%d %d\n", stmt->line_number, stmt->loc);
+	fprintf(stream, "%d %d %d\n", stmt->line_number, stmt->loc, stmt->inst_len);
 	fprintf(stream, "%s\n", stmt->label);
 	if (stmt->is_extended)
 		fprintf(stream, "+");
