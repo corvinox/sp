@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "mytype.h"
-#include "assembler.h"
+#include "asmtype.h"
 #include "asminstruction.h"
 #include "strutil.h"
 

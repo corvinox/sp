@@ -71,6 +71,12 @@
     <ClInclude Include="asminstruction.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="asmtype.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="sicvm.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="opcode.txt" />
@@ -81,6 +87,9 @@
       <Filter>소스 파일</Filter>
     </None>
     <None Include="2_5.int">
+      <Filter>소스 파일</Filter>
+    </None>
+    <None Include="2_5.lst">
       <Filter>소스 파일</Filter>
     </None>
   </ItemGroup>

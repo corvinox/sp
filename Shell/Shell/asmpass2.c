@@ -115,17 +115,30 @@ BOOL assemblePass2(Assembler* asmblr, FILE* log_stream)
 				lstfileWrite(&stmt, "", fp_lst);
 				break;
 			}
+			else if (stmt.instruction->type == INST_BASE) {
+				int* value = (int*)hashGetValue(&asmblr->sym_table, stmt.operand);
+				if (value == NULL) {
+					BOOL error;
+					int base_value = strToInt(stmt.operand, 10, &error);
+					if (error) {
+						/* error */
+						stmt.error = true;
+						fprintf(log_stream, "LINE %d: OPERAND (%s)는 유효하지 않습니다.\n", stmt.line_number, stmt.operand);
+					}
+					else {
+						asmblr->base_value = base_value;
+					}
+				}
+				else {
+					asmblr->base_value = *value;
+				}
+			}
 			else if (stmt.instruction->type == INST_OPCODE) {
 				int opcode_format = (int)stmt.instruction->aux;
-				if (opcode_format != 1 && !stmt.has_operand) {
+				if (opcode_format != 3 && stmt.is_extended) {
 					/* error */
 					stmt.error = true;
-					fprintf(log_stream, "LINE %d: INSTRUCTION (%s) 는 OPERAND가 필요합니다.\n", stmt.line_number, stmt.instruction->mnemonic);
-				}
-				else if (opcode_format != 3 && stmt.is_extended) {
-					/* error */
-					stmt.error = true;
-					fprintf(log_stream, "LINE %d: INSTRUCTION (%s) FORMAT4로 사용 할 수 없습니다.\n", stmt.line_number, stmt.instruction->mnemonic);
+					fprintf(log_stream, "LINE %d: INSTRUCTION (%s)는 FORMAT4로 사용 될 수 없습니다.\n", stmt.line_number, stmt.instruction->mnemonic);
 				}
 				/* opcode instruction의 format이 1 인 경우 */
 				else if (opcode_format == 1) {
@@ -181,13 +194,24 @@ BOOL assemblePass2(Assembler* asmblr, FILE* log_stream)
 				}
 				/* opcode instruction의 format이 3/4 인 경우 */
 				else if (opcode_format == 3) {
-					char* begin = stmt.operand;
-
 					BYTE bit_n = 1, bit_i = 1;
 					BYTE bit_b = 0, bit_p = 0;
 					BYTE bit_x = 0, bit_e = 0;
 					int addr = 0;
 
+					if (stmt.has_operand) {
+
+					}
+					else {
+						sprintf(obj_code, "%8X", (BYTE)stmt.instruction->value);
+					}
+
+					if (!stmt.error) {
+
+					}
+
+					char* begin = stmt.operand;
+					
 					/* indirect mode 인지 검사 */
 					if (*begin == '@') {
 						bit_i = 0;
@@ -457,7 +481,7 @@ static void lstfileWrite(Statement* stmt, char* obj_code, FILE* stream)
 	for (int i = 0; i < LST_GAP_LEN; i++)
 		sprintf(ptr++, " ");
 
-	if (stmt->addr_mode == ADDR_IMMEDIATE)
+	if (stmt->operand == ADDR_IMMEDIATE)
 		sprintf(ptr, "#");
 	else if (stmt->addr_mode == ADDR_INDIRECT)
 		sprintf(ptr, "@");

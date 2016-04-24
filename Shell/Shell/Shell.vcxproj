@@ -161,10 +161,12 @@
     <ClInclude Include="asminstruction.h" />
     <ClInclude Include="asmpass1.h" />
     <ClInclude Include="asmpass2.h" />
+    <ClInclude Include="asmtype.h" />
     <ClInclude Include="assembler.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="list.h" />
     <ClInclude Include="shell.h" />
+    <ClInclude Include="sicvm.h" />
     <ClInclude Include="strutil.h" />
     <ClInclude Include="mytype.h" />
   </ItemGroup>
@@ -175,6 +177,7 @@
   <ItemGroup>
     <None Include="2_5.asm" />
     <None Include="2_5.int" />
+    <None Include="2_5.lst" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

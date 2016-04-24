@@ -2,7 +2,7 @@
 #define ASMINSTRUCTION_H_
 
 #include <stdio.h>
-#include "assembler.h"
+#include "asmtype.h"
 
 extern AsmInstruction* getInstruction(Assembler* asmblr, char* str);
 extern void execInstStart(Assembler* asmblr, Statement* stmt, FILE* log_stream);

@@ -333,7 +333,7 @@ static void entryRelease(void* data, void* aux)
 }
 
 /*************************************************************************************
-* 설명: assembler에서 사용되는 유사 instruction인 assembler directive 들을
+* 설명: assembler에서 사용되는 pseudo-instruction인 assembler directive 들을
 *       hash table에 저장하여 초기화한다.
 * 인자:
 * - asmblr: Assembler에 대한 정보를 담고 있는 구조체에 대한 포인터
