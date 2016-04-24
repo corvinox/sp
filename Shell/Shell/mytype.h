@@ -1,6 +1,8 @@
 ﻿#ifndef MYTYPE_H_
 #define MYTYPE_H_
 
+#include <stdio.h>
+
 #ifndef true
 #define true 1
 #endif

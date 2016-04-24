@@ -23,6 +23,10 @@ static void runCmdOplist(Shell* shell);
 static void runCmdAssemble(Shell* shell);
 static void runCmdType(Shell* shell);
 static void runCmdSymbol(Shell* shell);
+static void runCmdProgaddr(Shell* shell);
+static void runCmdLoader(Shell* shell);
+static void runCmdRun(Shell* shell);
+static void runCmdBp(Shell* shell);
 static void commandInitialize(Shell* shell);
 static void commandRun(Shell* shell);
 
@@ -37,13 +41,31 @@ static void releaseHistory(void* data, void* aux);
 * 설명: Shell 구조체에 대한 초기화를 수행한다. 예를 들면, 각종 변수들의 값을
 *       초기화하고, 가상 메모리에 대한 메모리 할당을 하고, 파일을 읽어 opcode table을
 *       구성하는 등의 작업을 수행한다. start하기 전에는 무조건 실행해야 한다.
+*       인자로 넘어오는 구조체는 사전에 초기화되어있어야 한다.
+*
 * 인자:
+* - sicxevm: sic/xe 가상 머신에 대한 정보를 담고 있는 구조체에 대한 포인터
+* - asmblr: assembler에 대한 정보를 담고 있는 구조체에 대한 포인터
+* - loader: loader에 대한 정보를 담고 있는 구조체에 대한 포인터
 * - shell: shell에 대한 정보를 담고 있는 구조체에 대한 포인터
+* 
 * 반환값: 없음
 *************************************************************************************/
-void shellInitialize(Shell* shell)
+void shellInitialize(Shell* shell, SICXEVM* sicxevm, Assembler* asmblr, Loader* loader)
 {
-	int i;
+	if (!shell || !sicxevm || !asmblr || !loader) {
+		shell->error = ERR_INIT;
+		return;
+	}
+	
+	if (!vmIsInitialized(sicxevm) || !assemblerIsIntialized(asmblr) || loaderIsInitialized(loader)) {
+		shell->error = ERR_INIT;
+		return;
+	}
+
+	shell->sicxevm = sicxevm;
+	shell->assembler = asmblr;
+	shell->loader = loader;
 
 	/* init variables */
 	shell->argc = 0;
@@ -52,24 +74,15 @@ void shellInitialize(Shell* shell)
 	shell->error = ERR_NONE;
 
 	/* init virtual memory */
-	for (i = 0; i < ARG_CNT_MAX; i++) {
+	for (int i = 0; i < ARG_CNT_MAX; i++) {
 		memset(shell->args[i], 0, sizeof(char) * ARG_LEN_MAX);
 	}
-	shell->vm = (char*)malloc(sizeof(char) * MEM_SIZE);
-	if (shell->vm == NULL) {
-		shell->error = ERR_INIT;
-		return;
-	}
-	memset(shell->vm, 0, sizeof(char) * MEM_SIZE);
 	
 	/* init history*/
 	listInitialize(&shell->history);
 
 	/* init command */
 	commandInitialize(shell);
-
-	/* 어셈블러 초기화 */
-	assemblerInitialize(&shell->assembler);
 
 	/* 초기화 과정을 모두 끝내고 에러가 있으면 초기화 실패 */
 	if (shell->error != ERR_NONE) {
@@ -120,11 +133,6 @@ void shellStart(Shell* shell)
 *************************************************************************************/
 void shellRelease(Shell* shell)
 {
-	assemblerRelease(&shell->assembler);
-
-	if (shell->vm != NULL)
-		free(shell->vm);
-
 	listForeach(&shell->history, NULL, releaseHistory);
 	listClear(&shell->history);
 }
@@ -484,7 +492,7 @@ static void runCmdOpcode(Shell* shell)
 		return;
 	}
 
-	assemblerPrintOpcode(&shell->assembler, shell->args[0], stdout);
+	assemblerPrintOpcode(shell->assembler, shell->args[0], stdout);
 }
 
 /*************************************************************************************
@@ -500,7 +508,7 @@ static void runCmdOplist(Shell* shell)
 		return;
 	}
 
-	assemblerPrintOpcodeTable(&shell->assembler, stdout);
+	assemblerPrintOpcodeTable(shell->assembler, stdout);
 }
 
 /*************************************************************************************
@@ -516,7 +524,7 @@ static void runCmdAssemble(Shell* shell)
 		return;
 	}
 
-	assemblerAssemble(&shell->assembler, shell->args[0], stdout);
+	assemblerAssemble(shell->assembler, shell->args[0], stdout);
 }
 
 /*************************************************************************************
@@ -572,7 +580,57 @@ static void runCmdSymbol(Shell* shell)
 		return;
 	}
 
-	assemblerPrintSymbolTable(&shell->assembler, stdout);
+	assemblerPrintSymbolTable(shell->assembler, stdout);
+}
+
+static void runCmdProgAddr(Shell* shell)
+{	
+
+}
+
+static void runCmdLoader(Shell* shell)
+{
+	const char* EMPTY_STR = "                                                        \n";
+
+	printf("            control     symbol      address     length  \n");
+	printf("            section     name                            \n");
+	printf("            --------------------------------------------\n");
+	
+	char format_str[64] = "                                                        \n";
+	char num_str[16];
+	char* sec_name = "asd";
+	char* sym_name = "asd";
+	int addr = 0;
+	int length = 0;
+	strncpy(format_str + 12, sec_name, strlen(sec_name));
+	strncpy(format_str + 24, sym_name, strlen(sym_name));
+	sprintf(num_str, "%04X", (WORD)addr);
+	strncpy(format_str + 36, num_str, strlen(num_str));
+	sprintf(num_str, "%04X", (WORD)length);
+	strncpy(format_str + 48, num_str, strlen(num_str));
+}
+
+static void runCmdRun(Shell* shell)
+{
+	if (shell->argc != 0) {
+		shell->error = ERR_INVALID_USE;
+		return;
+	}
+
+	/* 현재 Register들에 들어있는 값 출력 */
+	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "A"));
+	printf("  %2s: %06X\n", "X", vmGetRegisterValue(shell->sicxevm, "X"));
+	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "L"));
+	printf("  %2s: %06X\n", "X", vmGetRegisterValue(shell->sicxevm, "PC"));
+	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "B"));
+	printf("  %2s: %06X\n", "X", vmGetRegisterValue(shell->sicxevm, "S"));
+	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "T"));
+	printf("\n");
+}
+
+static void runCmdBreakPoint(Shell* shell)
+{
+
 }
 
 /*************************************************************************************
@@ -600,6 +658,10 @@ static void commandInitialize(Shell* shell)
 	shell->cmds[CMD_ASSEMBLE] = runCmdAssemble;
 	shell->cmds[CMD_TYPE] = runCmdType;
 	shell->cmds[CMD_SYMBOL] = runCmdSymbol;
+	shell->cmds[CMD_PROG_ADDR] = runCmdProgAddr;
+	shell->cmds[CMD_LOADER] = runCmdLoader;
+	shell->cmds[CMD_RUN] = runCmdRun;
+	shell->cmds[CMD_BREAK_POINT] = runCmdBreakPoint;
 }
 
 /*************************************************************************************
@@ -782,6 +844,14 @@ static int getCommandCode(char* cmd)
 		return CMD_TYPE;
 	else if (!strncmp(cmd, "symbol", CMD_LEN_MAX))
 		return CMD_SYMBOL;
+	else if (!strncmp(cmd, "progaddr", CMD_LEN_MAX))
+		return CMD_PROG_ADDR;
+	else if (!strncmp(cmd, "loader", CMD_LEN_MAX))
+		return CMD_LOADER;
+	else if (!strncmp(cmd, "run", CMD_LEN_MAX))
+		return CMD_RUN;
+	else if (!strncmp(cmd, "bp", CMD_LEN_MAX))
+		return CMD_BREAK_POINT;
 	else
 		return CMD_INVALID;
 }

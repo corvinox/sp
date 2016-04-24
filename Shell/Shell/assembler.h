@@ -6,6 +6,7 @@
 
 extern BOOL assemblerInitialize(Assembler* asmblr);
 extern void assemblerRelease(Assembler* asmblr);
+extern BOOL assemblerIsIntialized(Assembler* asmblr);
 extern void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream);
 extern void assemblerPrintOpcode(Assembler* asmblr, char* opcode, FILE* stream);
 extern void assemblerPrintOpcodeTable(Assembler* asmblr, FILE* stream);

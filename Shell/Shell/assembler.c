@@ -38,7 +38,11 @@ static void registerLoad(Assembler* asmblr);
 
 BOOL assemblerInitialize(Assembler* asmblr)
 {
+	if (!asmblr)
+		return false;
+
 	/* assembler 변수 초기화 */
+	asmblr->initialized = false;
 	asmblr->state = STAT_IDLE;
 	asmblr->error = ERR_NO;
 	asmblr->prog_addr = 0; 
@@ -73,6 +77,8 @@ BOOL assemblerInitialize(Assembler* asmblr)
 	/* SIC/XE 머신에서 사용되는 register들을 table에 저장 */
 	registerLoad(asmblr);
 
+	/* intiailize 성공 */
+	asmblr->initialized = true;
 	return true;
 }
 
@@ -93,6 +99,11 @@ void assemblerRelease(Assembler* asmblr)
 	/* register talbe에 할당한 메모리 해제 */
 	hashForeach(&asmblr->reg_table, NULL, entryRelease);
 	hashRelease(&asmblr->reg_table);
+}
+
+BOOL assemblerIsIntialized(Assembler* asmblr)
+{
+	return asmblr && asmblr->initialized;
 }
 
 void assemblerAssemble(Assembler* asmblr, const char* filename, FILE* log_stream)

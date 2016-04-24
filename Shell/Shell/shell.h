@@ -4,6 +4,8 @@
 #include "mytype.h"
 #include "list.h"
 #include "hash.h"
+#include "sicxevm.h"
+#include "loader.h"
 #include "assembler.h"
 
 #define OP_LEN_MAX 16;
@@ -40,9 +42,15 @@ typedef enum
 	CMD_RESET, 
 	CMD_OPCODE, 
 	CMD_OPLIST,
+
 	CMD_ASSEMBLE,
 	CMD_TYPE,
-	CMD_SYMBOL
+	CMD_SYMBOL,
+
+	CMD_PROG_ADDR,
+	CMD_LOADER,
+	CMD_RUN,
+	CMD_BREAK_POINT
 } ShellCmd;
 
 
@@ -76,11 +84,14 @@ typedef struct Shell_ {
 	void(*cmds[CMD_CNT])(struct Shell_*);
 	List history;
 	HashTable op_table;
-	Assembler assembler;
+
+	SICXEVM* sicxevm;
+	Assembler* assembler;
+	Loader* loader;
 } Shell;
 
 /* Shell 관련 함수 */
-extern void shellInitialize(Shell* shell);
+extern void shellInitialize(Shell* shell, SICXEVM* sicxevm, Assembler* asmblr, Loader* loader);
 extern void shellStart(Shell* shell);
 extern void shellRelease(Shell* shell);
 

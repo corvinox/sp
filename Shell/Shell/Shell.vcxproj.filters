@@ -42,6 +42,12 @@
     <ClCompile Include="asminstruction.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="loader.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="sicxevm.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="asmpass1.h">
@@ -74,7 +80,10 @@
     <ClInclude Include="asmtype.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="sicvm.h">
+    <ClInclude Include="loader.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="sicxevm.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

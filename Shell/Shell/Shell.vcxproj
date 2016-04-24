@@ -154,7 +154,9 @@
     <ClCompile Include="assembler.c" />
     <ClCompile Include="hash.c" />
     <ClCompile Include="list.c" />
+    <ClCompile Include="loader.c" />
     <ClCompile Include="shell.c" />
+    <ClCompile Include="sicxevm.c" />
     <ClCompile Include="strutil.c" />
   </ItemGroup>
   <ItemGroup>
@@ -165,8 +167,9 @@
     <ClInclude Include="assembler.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="list.h" />
+    <ClInclude Include="loader.h" />
     <ClInclude Include="shell.h" />
-    <ClInclude Include="sicvm.h" />
+    <ClInclude Include="sicxevm.h" />
     <ClInclude Include="strutil.h" />
     <ClInclude Include="mytype.h" />
   </ItemGroup>

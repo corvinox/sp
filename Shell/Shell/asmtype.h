@@ -3,6 +3,7 @@
 
 #include "mytype.h"
 #include "hash.h"
+#include "sicxevm.h"
 
 #define LABEL_LEN_MAX    8
 #define OPERAND_LEN_MAX  128
@@ -93,6 +94,7 @@ typedef struct _AsmInstruction
 
 typedef struct _Assembler
 {
+	BOOL initialized;
 	int state;
 	int error;
 	int prog_addr;
