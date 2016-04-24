@@ -5,11 +5,13 @@
 #include "hash.h"
 
 #define MEMORY_SIZE   0xFFFFF
-#define REGISTER_COUNT 9
-#define REGISTER_NUM_MIN 0
-#define REGISTER_NUM_MAX 9
-#define REGISTER_TABLE_SIZE (REGISTER_NUM_MAX - REGISTER_NUM_MIN + 1)
 
+typedef enum _OpcodeFormat
+{
+	FORMAT1,
+	FORMAT2, 
+	FORMAT34
+} OpcodeFormat;
 
 typedef struct _RegisterInfo
 {
@@ -23,17 +25,21 @@ typedef struct _Register
 	WORD value;
 } Register;
 
-
+typedef struct _Opcode
+{
+	char* mnemonic;
+	BYTE value;
+	OpcodeFormat format;
+} Opcode;
 
 typedef struct _SICXEVM 
 {
 	BOOL initialized;
-	BYTE* memory;
-	Register registers[REGISTER_COUNT];
+	WORD prog_addr;
 
+	BYTE* memory;
 	HashTable reg_table;
 	HashTable op_table;
-	HashTable instructionTable;
 
 } SICXEVM;
 
@@ -44,6 +50,9 @@ extern BOOL vmIsInitialized(SICXEVM* vm);
 extern BYTE* vmGetMemory(SICXEVM* vm);
 extern RegisterInfo* vmGetRegisterInfo(SICXEVM* vm, char* reg_name);
 extern WORD* vmGetRegisterValue(SICXEVM* vm, char* reg_name);
-extern HashTable* vmGetInstructionTable(SICXEVM* vm);
+extern HashTable* vmGetOpcodeTable(SICXEVM* vm);
+extern void vmSetProgAddr(SICXEVM* loader, WORD prog_addr);
+extern void vmSetBreakPoint(SICXEVM* loader, WORD addr);
+extern void vmClearBreakPoints(SICXEVM* loader);
 
 #endif

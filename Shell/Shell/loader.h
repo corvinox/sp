@@ -14,8 +14,8 @@ typedef struct _Loader
 } Loader;
 
 extern BOOL loaderInitialize(Loader* loader, SICXEVM* sicxevm);
-extern BOOL loaderIsInitialized(Loader* loader);
 extern void loaderRelease(Loader* loader);
+extern BOOL loaderIsInitialized(Loader* loader);
 extern void loaderSetProgAddr(Loader* loader, WORD prog_addr);
 extern void loaderLinkLoad(Loader* loader);
 extern void loaderSetBreakPoint(Loader* loader, WORD addr);

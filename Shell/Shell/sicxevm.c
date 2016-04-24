@@ -9,13 +9,16 @@
 
 static int registerHashFunc(void* key);
 static int registerCompare(void* key0, void* key1);
-
+static void registerRelease(void* data, void* aux);
 
 BOOL vmInitialize(SICXEVM* vm)
 {
 	if (!vm)
 		return false;
+
+	/* 변수 값 초기화 */
 	vm->initialized = false;
+	vm->prog_addr = 0;
 
 	/* sic/xe 머신에서 사용될 가상 메모리 할당 및 초기화 */
 	vm->memory = (BYTE*)malloc(sizeof(BYTE) * MEMORY_SIZE);
@@ -23,9 +26,10 @@ BOOL vmInitialize(SICXEVM* vm)
 		return false;	
 	memset(vm->memory, 0, sizeof(BYTE) * MEMORY_SIZE);
 
+	/* Register 초기화 */
 	hashInitialize(&vm->reg_table, REGTAB_BUCKET_SIZE, registerHashFunc, registerCompare);
+	registerLoad(&vm->reg_table);
 	
-
 	/* intiailize 성공 */
 	vm->initialized = true;
 	return true;
@@ -35,6 +39,17 @@ void vmRelease(SICXEVM* vm)
 {
 	if (!vm)
 		return;
+
+	/* register talbe에 할당한 메모리 해제 */
+	hashForeach(&vm->reg_table, NULL, registerRelease);
+	hashRelease(&vm->reg_table);
+	
+	/* sic/xe 머신에서 사용될 가상 메모리 해제 */
+	free(vm->memory);
+
+	/* 변수 값 초기화 */
+	vm->prog_addr = 0;
+	vm->initialized = false;
 }
 
 BOOL vmIsInitialized(SICXEVM* vm)
@@ -80,14 +95,28 @@ WORD* vmGetRegisterValue(SICXEVM* vm, char* reg_name)
 	return &reg->value;
 }
 
-HashTable* vmGetInstructionTable(SICXEVM* vm)
+HashTable* vmGetOpcodeTable(SICXEVM* vm)
 {
 	if (!vm || !vm->initialized)
 		return NULL;
 
-	return &vm->instructionTable;
+	return &vm->op_table;
 }
 
+extern void vmSetProgAddr(SICXEVM* loader, WORD prog_addr)
+{
+
+}
+
+extern void vmSetBreakPoint(SICXEVM* loader, WORD addr)
+{
+
+}
+
+extern void vmClearBreakPoints(SICXEVM* loader)
+{
+
+}
 
 /*************************************************************************************
 * 설명: 인자로 전달된 key로부터 적절한 hash 값을 얻어낸다.
@@ -118,6 +147,28 @@ static int registerHashFunc(void* key)
 static int registerCompare(void* key0, void* key1)
 {
 	return strcmp((char*)key0, (char*)key1);
+}
+
+/*************************************************************************************
+* 설명: register table은 hash table로 구성된다.
+*       두 테이블의 각 entry의 key, value에 값을 넣을 때 메모리를 할당했으므로,
+*       할당한 메모리를 해제해 주어야 한다. hash table의 모든 entry에 적용되는
+*       action function으로 data에 할당한 메모리를 해제하는 역할을 한다.
+* 인자:
+* - data: hash table 각 entry를 나타내는 변수.
+* - aux: 추가적으로 필요하면 활용하기 위한 변수. auxiliary
+* 반환값: 없음
+*************************************************************************************/
+static void registerRelease(void* data, void* aux)
+{
+	if (data != NULL) {
+		HashEntry* entry = (HashEntry*)data;
+		if (entry != NULL) {
+			free(entry->key);
+			free(entry->value);
+		}
+		free(entry);
+	}
 }
 
 /*************************************************************************************
