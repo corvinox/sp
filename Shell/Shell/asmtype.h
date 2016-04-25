@@ -77,7 +77,7 @@ typedef struct _Statement
 	char obj_code[OBJ_LEN_MAX + 1];
 } Statement;
 
-typedef struct _Register
+typedef struct _AsmRegister
 {
 	char* mnemonic;
 	int number;

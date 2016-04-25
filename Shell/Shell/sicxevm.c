@@ -10,6 +10,7 @@
 static int registerHashFunc(void* key);
 static int registerCompare(void* key0, void* key1);
 static void registerRelease(void* data, void* aux);
+static void registerLoad(HashTable* reg_tab);
 
 BOOL vmInitialize(SICXEVM* vm)
 {

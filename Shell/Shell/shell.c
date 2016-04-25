@@ -618,13 +618,13 @@ static void runCmdRun(Shell* shell)
 	}
 
 	/* 현재 Register들에 들어있는 값 출력 */
-	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "A"));
-	printf("  %2s: %06X\n", "X", vmGetRegisterValue(shell->sicxevm, "X"));
-	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "L"));
-	printf("  %2s: %06X\n", "X", vmGetRegisterValue(shell->sicxevm, "PC"));
-	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "B"));
-	printf("  %2s: %06X\n", "X", vmGetRegisterValue(shell->sicxevm, "S"));
-	printf("            %2s: %06X", "A", vmGetRegisterValue(shell->sicxevm, "T"));
+	printf("            %2s: %06X", "A", *vmGetRegisterValue(shell->sicxevm, "A"));
+	printf("  %2s: %06X\n", "X", *vmGetRegisterValue(shell->sicxevm, "X"));
+	printf("            %2s: %06X", "A", *vmGetRegisterValue(shell->sicxevm, "L"));
+	printf("  %2s: %06X\n", "X", *vmGetRegisterValue(shell->sicxevm, "PC"));
+	printf("            %2s: %06X", "A", *vmGetRegisterValue(shell->sicxevm, "B"));
+	printf("  %2s: %06X\n", "X", *vmGetRegisterValue(shell->sicxevm, "S"));
+	printf("            %2s: %06X", "A", *vmGetRegisterValue(shell->sicxevm, "T"));
 	printf("\n");
 }
 
